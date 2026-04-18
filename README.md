@@ -1,54 +1,78 @@
 # boke-N
 
-博客网站（前端 H5 + 后台管理端）最小可用版本。
+博客网站（前端 H5 + 后台管理端）版本，主技术栈已切换为：
 
-## 已实现功能
+- 前端：Vue 3 + Vite
+- 后端：Java 21 + Spring Boot
+
+## 功能说明
 
 ### 后台管理端（RBAC）
 
 - 管理员登录
-- 菜单管理能力覆盖：
+- 菜单功能包含：
   - 角色管理
   - 用户管理
   - 资源管理
   - 文章管理
   - 违禁词管理
   - 评论记录管理
-- 文章发布后可在前端展示
-- 违禁词会在用户发表评论时生效拦截
+- 支持文章发布后前端展示
+- 评论内容会校验违禁词
 
 ### 前端 H5
 
-- 文章列表 + 文章详情展示
-- 用户注册/登录
-- 仅登录用户可发表评论
-- 左侧（侧边栏）展示浏览量 Top10 文章
-- 当没有任何文章时，显示最近天气（默认上海市）
+- 文章列表 + 文章详情
+- 用户注册 / 登录
+- 登录后可评论（未登录不可评论）
+- 侧边栏展示浏览量 Top10 文章
+- 若没有文章，展示默认上海市天气
 
-## 技术栈
+## 项目结构
 
-- Node.js + Express
-- 原生 HTML/CSS/JavaScript
-- 本地 JSON 文件存储（`data/db.json`）
+```text
+backend/   Spring Boot API 服务
+frontend/  Vue 前端（含管理端与 H5）
+```
 
 ## 快速启动
 
+### 1) 启动后端（Spring Boot）
+
 ```bash
-npm install
-npm start
+cd backend
+./mvnw spring-boot:run
 ```
 
-启动后访问：
+默认端口：`8080`
 
-- 前端 H5：`http://localhost:3000/`
-- 后台管理端：`http://localhost:3000/admin`
+### 2) 启动前端（Vue）
 
-## 默认测试账号
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+默认端口：`5173`
+
+### 3) 访问地址
+
+- H5 前端：`http://localhost:5173/`
+- 管理端：`http://localhost:5173/?view=admin`
+
+## 默认账号
 
 - 管理员：`admin / Admin123!`
 - 普通用户：`demo / Demo123!`
 
-## 说明
+## 已验证
 
-- 当前天气接口使用演示数据，后续可替换为真实天气 API。
-- 当前存储方式为本地 JSON，后续可平滑升级到 MySQL/PostgreSQL。
+- 后端：`./mvnw test` 通过
+- 前端：`npm run build` 通过
+- API 烟测通过（登录、文章创建、评论、Top10、天气兜底）
+
+## 后续建议
+
+- 当前后端采用内存仓库存储，重启会重置数据。可下一步替换为 MySQL / PostgreSQL + JPA。
+- 天气接口当前为演示数据，后续可接入真实天气 API。
