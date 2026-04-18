@@ -50,7 +50,9 @@ mysql -uroot -p < db/mysql/001_schema.sql
 mysql -uroot -p < db/mysql/002_seed.sql
 ```
 
-> 注意：`002_seed.sql` 中默认用户密码 hash 为占位值，接入真实登录时请替换为服务端实际加密后的 hash。
+> `002_seed.sql` 已提供可直接使用的 bcrypt 密码（可直接登录）：
+> - admin / Admin123!
+> - demo / Demo123!
 
 ## 快速启动
 
@@ -62,6 +64,14 @@ cd backend
 ```
 
 默认端口：`8080`
+
+若需指定数据库连接，可设置环境变量：
+
+```bash
+export SPRING_DATASOURCE_URL="jdbc:mysql://127.0.0.1:3306/boke_n?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=utf8"
+export SPRING_DATASOURCE_USERNAME="root"
+export SPRING_DATASOURCE_PASSWORD=""
+```
 
 ### 2) 启动前端（Vue）
 
@@ -88,8 +98,9 @@ npm run dev
 - 后端：`./mvnw test` 通过
 - 前端：`npm run build` 通过
 - API 烟测通过（登录、文章创建、评论、Top10、天气兜底）
+- MySQL 实库联调通过（数据实际写入 `users/articles/comments`）
 
 ## 后续建议
 
-- 当前后端采用内存仓库存储，重启会重置数据。可下一步替换为 MySQL / PostgreSQL + JPA。
+- 当前已切换为 MySQL JDBC 持久化，后续可升级为 MySQL/PostgreSQL + JPA 或 MyBatis。
 - 天气接口当前为演示数据，后续可接入真实天气 API。
