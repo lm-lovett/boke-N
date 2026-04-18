@@ -26,8 +26,8 @@ INSERT IGNORE INTO role_resources (role_id, resource_id) VALUES
 -- 默认用户（密码 hash 请替换为你系统实际算法产物）
 -- 这里使用占位 hash，接入真实登录时建议由服务端创建/迁移时加密
 INSERT IGNORE INTO users (id, username, nickname, password_hash) VALUES
-  (1, 'admin', '管理员', '$2a$10$placeholder.admin.hash.replace.me'),
-  (2, 'demo', '示例用户', '$2a$10$placeholder.demo.hash.replace.me');
+  (1, 'admin', '管理员', '$2a$10$LsJpYNJ3fEtSkouyp4wDhuwW3atbTJ87CLoFsJ3/7EWiQcclyHnWy'),
+  (2, 'demo', '示例用户', '$2a$10$0297XSzEHmr5.L7Mye4EbOnyRZ.HYP2niQ.eKZVgyUSdHPPJj2ZNm');
 
 -- 用户-角色关系
 INSERT IGNORE INTO user_roles (user_id, role_id) VALUES

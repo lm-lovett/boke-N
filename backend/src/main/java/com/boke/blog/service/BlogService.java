@@ -15,28 +15,27 @@ import com.boke.blog.model.Comment;
 import com.boke.blog.model.Resource;
 import com.boke.blog.model.Role;
 import com.boke.blog.model.User;
-import com.boke.blog.repository.InMemoryRepository;
+import com.boke.blog.repository.BlogJdbcRepository;
 import com.boke.blog.security.AuthPrincipal;
 import com.boke.blog.security.JwtService;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
 @Service
 public class BlogService {
 
-  private final InMemoryRepository repo;
+  private final BlogJdbcRepository repo;
   private final JwtService jwtService;
   private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
-  public BlogService(InMemoryRepository repo, JwtService jwtService) {
+  public BlogService(BlogJdbcRepository repo, JwtService jwtService) {
     this.repo = repo;
     this.jwtService = jwtService;
   }
@@ -45,15 +44,15 @@ public class BlogService {
     if (blank(username) || blank(password)) {
       throw new IllegalArgumentException("用户名和密码不能为空");
     }
-    User user = repo.users().stream().filter(u -> u.getUsername().equals(username)).findFirst()
+    User user = repo.findUserByUsername(username)
         .orElseThrow(() -> new IllegalArgumentException("用户名或密码错误"));
     if (!passwordEncoder.matches(password, user.getPasswordHash())) {
       throw new IllegalArgumentException("用户名或密码错误");
     }
 
-    List<Role> roles = repo.roles().stream().filter(r -> user.getRoleIds().contains(r.getId())).toList();
+    List<Role> roles = repo.listRolesByIds(user.getRoleIds());
     List<Long> resourceIds = roles.stream().flatMap(r -> r.getResourceIds().stream()).distinct().toList();
-    List<Resource> resources = repo.resources().stream().filter(r -> resourceIds.contains(r.getId())).toList();
+    List<Resource> resources = repo.listResourcesByIds(resourceIds);
     boolean isAdmin = roles.stream().anyMatch(r -> "admin".equals(r.getName()));
 
     String token = jwtService.issueToken(user.getId(), user.getUsername(), user.getRoleIds(), isAdmin);
@@ -64,280 +63,252 @@ public class BlogService {
     if (request == null || blank(request.username()) || blank(request.password())) {
       throw new IllegalArgumentException("用户名和密码不能为空");
     }
-    boolean exists = repo.users().stream().anyMatch(u -> u.getUsername().equals(request.username()));
-    if (exists) {
+    if (repo.existsUserByUsername(request.username())) {
       throw new IllegalArgumentException("用户名已存在");
     }
 
-    Role reader = repo.roles().stream().filter(r -> "reader".equals(r.getName())).findFirst()
+    Role reader = repo.findRoleByName("reader")
         .orElseThrow(() -> new IllegalArgumentException("reader 角色不存在"));
 
-    User user = new User();
-    user.setId(repo.nextUserId());
-    user.setUsername(request.username());
-    user.setNickname(blank(request.nickname()) ? request.username() : request.nickname());
-    user.setPasswordHash(passwordEncoder.encode(request.password()));
-    user.setRoleIds(new ArrayList<>(List.of(reader.getId())));
-
-    repo.users().add(user);
-    return sanitizeUser(user);
+    Long userId = repo.insertUser(
+        request.username(),
+        blank(request.nickname()) ? request.username() : request.nickname(),
+        passwordEncoder.encode(request.password()),
+        List.of(reader.getId())
+    );
+    User saved = repo.findUserById(userId).orElseThrow(() -> new IllegalStateException("用户创建失败"));
+    return sanitizeUser(saved);
   }
 
   public List<Role> listRoles() {
-    return repo.roles();
+    return repo.listRoles();
   }
 
   public Role createRole(RoleRequest request) {
-    requireAdminFields(request != null && !blank(request.name()), "角色名不能为空");
-    boolean exists = repo.roles().stream().anyMatch(r -> r.getName().equals(request.name()));
-    if (exists) {
+    if (request == null || blank(request.name())) {
+      throw new IllegalArgumentException("角色名不能为空");
+    }
+    if (repo.existsRoleName(request.name())) {
       throw new IllegalArgumentException("角色名已存在");
     }
-    Role role = new Role();
-    role.setId(repo.nextRoleId());
-    role.setName(request.name());
-    role.setDescription(Objects.requireNonNullElse(request.description(), ""));
-    role.setResourceIds(new ArrayList<>(Objects.requireNonNullElse(request.resourceIds(), List.of())));
-    repo.roles().add(role);
-    return role;
+    Long roleId = repo.insertRole(
+        request.name(),
+        Objects.requireNonNullElse(request.description(), ""),
+        sanitizeLongList(request.resourceIds())
+    );
+    return repo.findRoleById(roleId).orElseThrow(() -> new IllegalStateException("角色创建失败"));
   }
 
   public Role updateRole(Long id, RoleRequest request) {
-    Role role = findById(repo.roles(), id).orElseThrow(() -> new IllegalArgumentException("角色不存在"));
+    Role role = repo.findRoleById(id).orElseThrow(() -> new IllegalArgumentException("角色不存在"));
     if (request == null) {
       return role;
     }
-    if (!blank(request.name())) {
-      role.setName(request.name());
-    }
-    if (request.description() != null) {
-      role.setDescription(request.description());
-    }
+    String nextName = blank(request.name()) ? role.getName() : request.name();
+    String nextDesc = request.description() == null ? role.getDescription() : request.description();
+    repo.updateRole(id, nextName, nextDesc);
     if (request.resourceIds() != null) {
-      role.setResourceIds(new ArrayList<>(request.resourceIds()));
+      repo.replaceRoleResources(id, sanitizeLongList(request.resourceIds()));
     }
-    return role;
+    return repo.findRoleById(id).orElseThrow(() -> new IllegalStateException("角色更新失败"));
   }
 
   public void deleteRole(Long id) {
-    repo.roles().removeIf(r -> r.getId().equals(id));
-    for (User user : repo.users()) {
-      user.getRoleIds().removeIf(roleId -> roleId.equals(id));
+    if (repo.findRoleById(id).isEmpty()) {
+      throw new IllegalArgumentException("角色不存在");
     }
+    repo.deleteRole(id);
   }
 
   public List<Map<String, Object>> listUsers() {
-    return repo.users().stream().map(this::sanitizeUser).toList();
+    return repo.listUsers().stream().map(this::sanitizeUser).toList();
   }
 
   public Map<String, Object> createUser(UserRequest request) {
     if (request == null || blank(request.username()) || blank(request.password())) {
       throw new IllegalArgumentException("用户名和密码不能为空");
     }
-    boolean exists = repo.users().stream().anyMatch(u -> u.getUsername().equals(request.username()));
-    if (exists) {
+    if (repo.existsUserByUsername(request.username())) {
       throw new IllegalArgumentException("用户名已存在");
     }
-    User user = new User();
-    user.setId(repo.nextUserId());
-    user.setUsername(request.username());
-    user.setNickname(blank(request.nickname()) ? request.username() : request.nickname());
-    user.setPasswordHash(passwordEncoder.encode(request.password()));
-    user.setRoleIds(new ArrayList<>(Objects.requireNonNullElse(request.roleIds(), List.of())));
-    repo.users().add(user);
-    return sanitizeUser(user);
+    Long userId = repo.insertUser(
+        request.username(),
+        blank(request.nickname()) ? request.username() : request.nickname(),
+        passwordEncoder.encode(request.password()),
+        sanitizeLongList(request.roleIds())
+    );
+    User saved = repo.findUserById(userId).orElseThrow(() -> new IllegalStateException("用户创建失败"));
+    return sanitizeUser(saved);
   }
 
   public Map<String, Object> updateUser(Long id, UserRequest request) {
-    User user = findById(repo.users(), id).orElseThrow(() -> new IllegalArgumentException("用户不存在"));
+    User existing = repo.findUserById(id).orElseThrow(() -> new IllegalArgumentException("用户不存在"));
     if (request == null) {
-      return sanitizeUser(user);
+      return sanitizeUser(existing);
     }
-    if (request.nickname() != null) {
-      user.setNickname(request.nickname());
-    }
-    if (request.roleIds() != null) {
-      user.setRoleIds(new ArrayList<>(request.roleIds()));
-    }
+    String nickname = request.nickname() == null ? existing.getNickname() : request.nickname();
+    String passwordHash = existing.getPasswordHash();
     if (!blank(request.password())) {
-      user.setPasswordHash(passwordEncoder.encode(request.password()));
+      passwordHash = passwordEncoder.encode(request.password());
     }
-    return sanitizeUser(user);
+    repo.updateUser(id, nickname, passwordHash);
+    if (request.roleIds() != null) {
+      repo.replaceUserRoles(id, sanitizeLongList(request.roleIds()));
+    }
+    User updated = repo.findUserById(id).orElseThrow(() -> new IllegalStateException("用户更新失败"));
+    return sanitizeUser(updated);
   }
 
   public void deleteUser(Long id) {
-    repo.users().removeIf(u -> u.getId().equals(id));
+    if (repo.findUserById(id).isEmpty()) {
+      throw new IllegalArgumentException("用户不存在");
+    }
+    repo.deleteUser(id);
   }
 
   public List<Resource> listResources() {
-    return repo.resources();
+    return repo.listResources();
   }
 
   public Resource createResource(ResourceRequest request) {
     if (request == null || blank(request.code()) || blank(request.name())) {
       throw new IllegalArgumentException("资源编码和名称不能为空");
     }
-    Resource resource = new Resource();
-    resource.setId(repo.nextResourceId());
-    resource.setCode(request.code());
-    resource.setName(request.name());
-    repo.resources().add(resource);
-    return resource;
+    Long id = repo.insertResource(request.code(), request.name());
+    return repo.findResourceById(id).orElseThrow(() -> new IllegalStateException("资源创建失败"));
   }
 
   public Resource updateResource(Long id, ResourceRequest request) {
-    Resource resource = findById(repo.resources(), id)
-        .orElseThrow(() -> new IllegalArgumentException("资源不存在"));
+    Resource existing = repo.findResourceById(id).orElseThrow(() -> new IllegalArgumentException("资源不存在"));
     if (request == null) {
-      return resource;
+      return existing;
     }
-    if (!blank(request.code())) {
-      resource.setCode(request.code());
-    }
-    if (!blank(request.name())) {
-      resource.setName(request.name());
-    }
-    return resource;
+    String nextCode = blank(request.code()) ? existing.getCode() : request.code();
+    String nextName = blank(request.name()) ? existing.getName() : request.name();
+    repo.updateResource(id, nextCode, nextName);
+    return repo.findResourceById(id).orElseThrow(() -> new IllegalStateException("资源更新失败"));
   }
 
   public void deleteResource(Long id) {
-    repo.resources().removeIf(r -> r.getId().equals(id));
-    for (Role role : repo.roles()) {
-      role.getResourceIds().removeIf(resourceId -> resourceId.equals(id));
+    if (repo.findResourceById(id).isEmpty()) {
+      throw new IllegalArgumentException("资源不存在");
     }
+    repo.deleteResource(id);
   }
 
   public List<Article> listAdminArticles() {
-    return repo.articles().stream().sorted(Comparator.comparing(Article::getCreatedAt).reversed()).toList();
+    return repo.listAdminArticles();
   }
 
   public Article createArticle(ArticleRequest request, AuthPrincipal principal) {
     if (request == null || blank(request.title()) || blank(request.content())) {
       throw new IllegalArgumentException("文章标题和内容不能为空");
     }
-    Article article = new Article();
-    article.setId(repo.nextArticleId());
-    article.setTitle(request.title());
-    article.setSummary(Objects.requireNonNullElse(request.summary(), ""));
-    article.setContent(request.content());
-    article.setAuthor(blank(request.author()) ? principal.username() : request.author());
-    article.setViews(0L);
-    article.setPublished(request.published() == null || request.published());
-    article.setCreatedAt(Instant.now());
-    repo.articles().add(article);
-    return article;
+    Long articleId = repo.insertArticle(
+        request.title(),
+        Objects.requireNonNullElse(request.summary(), ""),
+        request.content(),
+        blank(request.author()) ? principal.username() : request.author(),
+        request.published() == null || request.published(),
+        Instant.now()
+    );
+    return repo.findArticleById(articleId).orElseThrow(() -> new IllegalStateException("文章创建失败"));
   }
 
   public Article updateArticle(Long id, ArticleRequest request) {
-    Article article = findById(repo.articles(), id)
-        .orElseThrow(() -> new IllegalArgumentException("文章不存在"));
+    Article existing = repo.findArticleById(id).orElseThrow(() -> new IllegalArgumentException("文章不存在"));
     if (request == null) {
-      return article;
+      return existing;
     }
-    if (request.title() != null) {
-      article.setTitle(request.title());
-    }
-    if (request.summary() != null) {
-      article.setSummary(request.summary());
-    }
-    if (request.content() != null) {
-      article.setContent(request.content());
-    }
-    if (request.author() != null) {
-      article.setAuthor(request.author());
-    }
-    if (request.published() != null) {
-      article.setPublished(request.published());
-    }
-    return article;
+    repo.updateArticle(
+        id,
+        request.title() == null ? existing.getTitle() : request.title(),
+        request.summary() == null ? existing.getSummary() : request.summary(),
+        request.content() == null ? existing.getContent() : request.content(),
+        request.author() == null ? existing.getAuthor() : request.author(),
+        request.published() == null ? Boolean.TRUE.equals(existing.getPublished()) : request.published()
+    );
+    return repo.findArticleById(id).orElseThrow(() -> new IllegalStateException("文章更新失败"));
   }
 
   public void deleteArticle(Long id) {
-    repo.articles().removeIf(a -> a.getId().equals(id));
-    repo.comments().removeIf(c -> c.getArticleId().equals(id));
+    if (repo.findArticleById(id).isEmpty()) {
+      throw new IllegalArgumentException("文章不存在");
+    }
+    repo.deleteArticle(id);
   }
 
   public List<BannedWord> listBannedWords() {
-    return repo.bannedWords();
+    return repo.listBannedWords();
   }
 
   public BannedWord createBannedWord(BannedWordRequest request) {
     if (request == null || blank(request.word())) {
       throw new IllegalArgumentException("违禁词不能为空");
     }
-    BannedWord bannedWord = new BannedWord();
-    bannedWord.setId(repo.nextBannedWordId());
-    bannedWord.setWord(request.word());
-    repo.bannedWords().add(bannedWord);
-    return bannedWord;
+    Long id = repo.insertBannedWord(request.word());
+    return repo.listBannedWords().stream()
+        .filter(item -> item.getId().equals(id))
+        .findFirst()
+        .orElseThrow(() -> new IllegalStateException("违禁词创建失败"));
   }
 
   public void deleteBannedWord(Long id) {
-    repo.bannedWords().removeIf(word -> word.getId().equals(id));
+    boolean exists = repo.listBannedWords().stream().anyMatch(item -> item.getId().equals(id));
+    if (!exists) {
+      throw new IllegalArgumentException("违禁词不存在");
+    }
+    repo.deleteBannedWord(id);
   }
 
   public List<Comment> listAdminComments() {
-    return repo.comments().stream().sorted(Comparator.comparing(Comment::getCreatedAt).reversed()).toList();
+    return repo.listAdminComments();
   }
 
   public void deleteComment(Long id) {
-    repo.comments().removeIf(c -> c.getId().equals(id));
+    if (repo.findCommentById(id).isEmpty()) {
+      throw new IllegalArgumentException("评论不存在");
+    }
+    repo.deleteComment(id);
   }
 
   public List<Article> listPublicArticles() {
-    return repo.articles().stream()
-        .filter(article -> Boolean.TRUE.equals(article.getPublished()))
-        .sorted(Comparator.comparing(Article::getCreatedAt).reversed())
-        .toList();
+    return repo.listPublicArticles();
   }
 
   public List<Article> top10Articles() {
-    return repo.articles().stream()
-        .filter(article -> Boolean.TRUE.equals(article.getPublished()))
-        .sorted(Comparator.comparing(Article::getViews).reversed())
-        .limit(10)
-        .toList();
+    return repo.top10Articles();
   }
 
   public ArticleDetailResponse articleDetail(Long id) {
-    Article article = repo.articles().stream()
-        .filter(a -> a.getId().equals(id) && Boolean.TRUE.equals(a.getPublished()))
-        .findFirst()
+    Article article = repo.findPublishedArticleById(id)
         .orElseThrow(() -> new IllegalArgumentException("文章不存在"));
-    article.setViews(article.getViews() + 1);
-    List<Comment> comments = repo.comments().stream()
-        .filter(c -> c.getArticleId().equals(id))
-        .sorted(Comparator.comparing(Comment::getCreatedAt).reversed())
-        .toList();
-    return new ArticleDetailResponse(article, comments);
+    repo.incrementArticleViews(id);
+    Article refreshed = repo.findPublishedArticleById(id)
+        .orElseThrow(() -> new IllegalArgumentException("文章不存在"));
+    List<Comment> comments = repo.listCommentsByArticleId(id);
+    return new ArticleDetailResponse(refreshed, comments);
   }
 
   public Comment createComment(Long articleId, CommentRequest request, AuthPrincipal principal) {
     if (request == null || blank(request.content())) {
       throw new IllegalArgumentException("评论内容不能为空");
     }
-    Article article = repo.articles().stream()
-        .filter(a -> a.getId().equals(articleId) && Boolean.TRUE.equals(a.getPublished()))
-        .findFirst()
+    Article article = repo.findPublishedArticleById(articleId)
         .orElseThrow(() -> new IllegalArgumentException("文章不存在"));
-    for (BannedWord word : repo.bannedWords()) {
+
+    for (BannedWord word : repo.listBannedWords()) {
       if (request.content().contains(word.getWord())) {
         throw new IllegalArgumentException("评论包含违禁词: " + word.getWord());
       }
     }
-    User user = repo.users().stream().filter(u -> u.getId().equals(principal.userId())).findFirst()
+
+    User user = repo.findUserById(principal.userId())
         .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
 
-    Comment comment = new Comment();
-    comment.setId(repo.nextCommentId());
-    comment.setArticleId(article.getId());
-    comment.setUserId(user.getId());
-    comment.setUsername(user.getUsername());
-    comment.setContent(request.content());
-    comment.setCreatedAt(Instant.now());
-
-    repo.comments().add(comment);
-    return comment;
+    Long commentId = repo.insertComment(article.getId(), user.getId(), user.getUsername(), request.content(),
+        Instant.now());
+    return repo.findCommentById(commentId).orElseThrow(() -> new IllegalStateException("评论创建失败"));
   }
 
   public Map<String, Object> weather(String city) {
@@ -372,14 +343,17 @@ public class BlogService {
     return principal;
   }
 
-  private void requireAdminFields(boolean condition, String message) {
-    if (!condition) {
-      throw new IllegalArgumentException(message);
-    }
-  }
-
   private boolean blank(String value) {
     return value == null || value.isBlank();
+  }
+
+  private List<Long> sanitizeLongList(List<Long> values) {
+    if (values == null) {
+      return List.of();
+    }
+    Set<Long> distinct = values.stream().filter(Objects::nonNull).filter(v -> v > 0)
+        .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
+    return List.copyOf(distinct);
   }
 
   private Map<String, Object> sanitizeUser(User user) {
@@ -389,29 +363,5 @@ public class BlogService {
     map.put("nickname", user.getNickname());
     map.put("roleIds", user.getRoleIds());
     return map;
-  }
-
-  private <T> Optional<T> findById(List<T> list, Long id) {
-    for (T item : list) {
-      if (item instanceof Role role && role.getId().equals(id)) {
-        return Optional.of(item);
-      }
-      if (item instanceof User user && user.getId().equals(id)) {
-        return Optional.of(item);
-      }
-      if (item instanceof Resource resource && resource.getId().equals(id)) {
-        return Optional.of(item);
-      }
-      if (item instanceof Article article && article.getId().equals(id)) {
-        return Optional.of(item);
-      }
-      if (item instanceof BannedWord bannedWord && bannedWord.getId().equals(id)) {
-        return Optional.of(item);
-      }
-      if (item instanceof Comment comment && comment.getId().equals(id)) {
-        return Optional.of(item);
-      }
-    }
-    return Optional.empty();
   }
 }
