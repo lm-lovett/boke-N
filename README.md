@@ -33,7 +33,24 @@
 ```text
 backend/   Spring Boot API 服务
 frontend/  Vue 前端（含管理端与 H5）
+db/mysql/  MySQL 建表与初始化脚本
 ```
+
+## 数据库脚本（MySQL）
+
+已提供完整数据库脚本：
+
+- `db/mysql/001_schema.sql`：建库建表（RBAC + 文章 + 评论 + 违禁词）
+- `db/mysql/002_seed.sql`：初始化角色、资源、账号关系、违禁词、演示数据
+
+执行方式示例：
+
+```bash
+mysql -uroot -p < db/mysql/001_schema.sql
+mysql -uroot -p < db/mysql/002_seed.sql
+```
+
+> 注意：`002_seed.sql` 中默认用户密码 hash 为占位值，接入真实登录时请替换为服务端实际加密后的 hash。
 
 ## 快速启动
 
