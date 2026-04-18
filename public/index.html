@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>博客 H5</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="header">
+      <h1>博客前端 H5</h1>
+    </header>
+    <main class="layout">
+      <aside class="sidebar">
+        <div class="card">
+          <h2>浏览量 Top 10</h2>
+          <div id="top-articles"></div>
+        </div>
+        <div class="card hidden" id="weather-card">
+          <h2>最近天气（默认上海市）</h2>
+          <p id="weather-content"></p>
+        </div>
+      </aside>
+
+      <section class="content">
+        <div class="card">
+          <h2>登录 / 注册（用于评论）</h2>
+          <div class="grid two">
+            <input id="h5-username" placeholder="用户名" />
+            <input id="h5-password" placeholder="密码" type="password" />
+          </div>
+          <div class="actions">
+            <button id="h5-login">登录</button>
+            <button id="h5-register">注册</button>
+          </div>
+          <p id="h5-user-state" class="muted">当前未登录</p>
+          <p class="muted">演示账号：demo / Demo123!</p>
+        </div>
+
+        <div class="card">
+          <h2>文章列表</h2>
+          <div id="article-list"></div>
+        </div>
+
+        <div class="card hidden" id="article-detail-card">
+          <h2 id="article-title">文章详情</h2>
+          <p id="article-meta" class="muted"></p>
+          <pre id="article-content" class="pre-content"></pre>
+
+          <hr />
+          <h3>评论</h3>
+          <div class="grid">
+            <textarea
+              id="comment-content"
+              rows="3"
+              placeholder="登录后可发表评论"
+            ></textarea>
+            <div class="actions">
+              <button id="submit-comment">提交评论</button>
+            </div>
+          </div>
+          <div id="comment-list"></div>
+        </div>
+      </section>
+    </main>
+    <script src="/h5.js"></script>
+  </body>
+</html>
