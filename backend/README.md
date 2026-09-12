@@ -2,7 +2,7 @@
 
 Python FastAPI API，生产环境部署在 **Cloudflare Python Workers + D1**（open beta）。
 
-> Python Workers 需要 `python_workers` compatibility flag；本仓库 `wrangler.jsonc` 已配置。
+> Python Workers 需要 `python_workers` compatibility flag；本仓库还启用 `disable_python_external_sdk`，使用 pywrangler 打包的 vendored `workers` 模块，而非运行时外部 SDK。
 
 ## 前置要求
 
