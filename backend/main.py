@@ -1,10 +1,20 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.database import init_database
 from app.exceptions import generic_handler, illegal_argument_handler, security_handler
 from app.routers import admin, auth, public
 
-app = FastAPI(title="boke-N API")
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    init_database()
+    yield
+
+
+app = FastAPI(title="boke-N API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

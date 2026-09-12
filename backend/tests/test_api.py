@@ -1,19 +1,17 @@
 import os
 
-import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-os.environ.setdefault("DB_USER", "boke")
-os.environ.setdefault("DB_PASSWORD", "")
-os.environ.setdefault("DB_NAME", "boke_n")
 
-from main import app
+@pytest.fixture(scope="module")
+def client() -> TestClient:
+    from main import app
 
-client = TestClient(app)
+    return TestClient(app)
 
 
-def test_health():
+def test_health(client: TestClient):
     response = client.get("/api/health")
     assert response.status_code == 200
     payload = response.json()
@@ -21,7 +19,7 @@ def test_health():
     assert payload["data"]["ok"] is True
 
 
-def test_admin_login_and_article_flow():
+def test_admin_login_and_article_flow(client: TestClient):
     login = client.post(
         "/api/auth/login",
         json={"username": "admin", "password": "Admin123!"},
@@ -54,7 +52,7 @@ def test_admin_login_and_article_flow():
     assert admin_articles.status_code == 200
 
 
-def test_demo_user_comment_and_banned_word():
+def test_demo_user_comment_and_banned_word(client: TestClient):
     login = client.post(
         "/api/auth/login",
         json={"username": "demo", "password": "Demo123!"},
@@ -77,7 +75,7 @@ def test_demo_user_comment_and_banned_word():
     assert "违禁词" in blocked.json()["message"]
 
 
-def test_register():
+def test_register(client: TestClient):
     username = f"pyuser_{os.getpid()}"
     response = client.post(
         "/api/auth/register",
