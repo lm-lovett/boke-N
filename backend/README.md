@@ -48,7 +48,7 @@ uv sync
 dependencies = ["fastapi", "bcrypt", "pyjwt", "pydantic"]
 
 [dependency-groups]
-dev = ["workers-py>=1.72.0"]
+dev = ["workers-py"]
 ```
 
 本地跑测试或 uvicorn 时，可临时安装：
