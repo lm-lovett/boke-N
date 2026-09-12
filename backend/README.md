@@ -48,7 +48,13 @@ uv sync
 dependencies = ["fastapi", "bcrypt", "pyjwt", "pydantic"]
 
 [dependency-groups]
-dev = ["workers-py", "workers-runtime-sdk", "uvicorn", "httpx", "pytest"]
+dev = ["workers-py>=1.72.0"]
+```
+
+本地跑测试或 uvicorn 时，可临时安装：
+
+```bash
+uv add --group dev pytest uvicorn httpx
 ```
 
 ## 2. 初始化 D1 数据库
@@ -136,6 +142,7 @@ uv run uvicorn main:app --host 0.0.0.0 --port 8080
 ## 测试
 
 ```bash
+uv add --group dev pytest
 uv run pytest tests/test_api.py
 ```
 
