@@ -13,7 +13,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "workers-py",
+    "workers-py>=1.72.0",
     "workers-runtime-sdk",
     "uvicorn",
     "httpx",

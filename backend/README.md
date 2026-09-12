@@ -6,8 +6,19 @@ Python FastAPI API，生产环境部署在 **Cloudflare Python Workers + D1**（
 
 ## 前置要求
 
-- [uv](https://docs.astral.sh/uv/)（Python 包管理器）
+- [uv](https://docs.astral.sh/uv/) **>= 0.29.8**（Python 包管理器，Windows 需此版本以上才支持 Pyodide）
 - [Node.js](https://nodejs.org/)（pywrangler 会代理 wrangler CLI）
+- [wrangler](https://developers.cloudflare.com/workers/wrangler/) **>= 4.64.0**（`npm install -g wrangler@latest`）
+- **workers-py >= 1.72.0**（已写入 `pyproject.toml` 的 dev 依赖）
+
+Windows 上建议先升级工具链：
+
+```powershell
+uv self update
+npm install -g wrangler@latest
+cd backend
+uv sync
+```
 
 ## 项目结构
 
@@ -134,3 +145,61 @@ uv run pytest tests/test_api.py
 
 - 管理员：`admin / Admin123!`
 - 普通用户：`demo / Demo123!`
+
+## Windows 故障排除
+
+若出现类似错误：
+
+```text
+ModuleNotFoundError: No module named 'python'
+Querying Python at ... pyodide-3.14.2-emscripten-wasm32-musl\python.exe failed
+uv venv ...\.venv-workers\pyodide-venv --python cpython-3.14.2-emscripten-wasm32-musl
+```
+
+这是 **uv 在 Windows 上创建 Pyodide 虚拟环境** 时的已知问题（旧版 uv / workers-py 更容易触发）。
+
+### 方案 A：升级工具链后重试（推荐）
+
+在 **PowerShell** 中执行：
+
+```powershell
+uv self update
+npm install -g wrangler@latest
+cd D:\my_workspace\boke-N\backend
+
+# 清理 pywrangler 生成的缓存
+Remove-Item -Recurse -Force .venv-workers, python_modules, pylock.toml -ErrorAction SilentlyContinue
+
+uv sync
+uv run pywrangler sync
+uv run pywrangler dev
+```
+
+也可直接用最新 pywrangler（不依赖项目内旧版本）：
+
+```powershell
+uvx --from workers-py pywrangler sync
+uvx --from workers-py pywrangler dev
+```
+
+### 方案 B：使用 WSL2（最稳定）
+
+在 WSL2（Ubuntu）中克隆项目并执行 Linux 流程：
+
+```bash
+cd backend
+uv sync
+uv run pywrangler dev
+```
+
+Cloudflare 官方对 Python Workers 的本地工具链在 **macOS / Linux / WSL** 上最稳定。
+
+### 方案 C：本地先用 uvicorn，部署用 CI 或 WSL
+
+Windows 上若 `pywrangler dev` 仍失败，可先用 SQLite 模式开发：
+
+```powershell
+uv run uvicorn main:app --host 0.0.0.0 --port 8080
+```
+
+部署时在 WSL 或 GitHub Actions 中执行 `uv run pywrangler deploy`。

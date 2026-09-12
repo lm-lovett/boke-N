@@ -43,8 +43,11 @@ backend/migrations/ D1 迁移脚本（Cloudflare 部署）
 
 ### 前置要求
 
-- [uv](https://docs.astral.sh/uv/)（Python 包管理器）
+- [uv](https://docs.astral.sh/uv/) **>= 0.29.8**
 - [Node.js](https://nodejs.org/)
+- wrangler **>= 4.64.0**
+
+Windows 用户若 `pywrangler dev` 报 `No module named 'python'`，请先执行 `uv self update` 并清理 `backend/.venv-workers`，详见 [`backend/README.md`](backend/README.md#windows-故障排除)。
 
 ### 部署流程
 
