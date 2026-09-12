@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-BACKEND_ROOT = Path(__file__).resolve().parent.parent
+BACKEND_ROOT = Path(__file__).resolve().parent.parent.parent
 PROJECT_ROOT = BACKEND_ROOT.parent
 DEFAULT_SQLITE_PATH = BACKEND_ROOT / "data" / "boke_n.db"
 

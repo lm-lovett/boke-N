@@ -8,7 +8,7 @@ from typing import Any, Iterator
 from app.config import get_sqlite_path
 
 
-class BlogRepository:
+class SqliteBlogRepository:
     @contextmanager
     def _connection(self) -> Iterator[sqlite3.Connection]:
         conn = sqlite3.connect(get_sqlite_path())

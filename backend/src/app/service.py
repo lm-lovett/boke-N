@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import inspect
 from datetime import datetime, timezone
+from typing import Any
 
 import bcrypt
 
 from app.jwt_service import JwtService
-from app.repository import BlogRepository
 from app.schemas import (
     ArticleRequest,
     AuthPrincipal,
@@ -20,18 +21,24 @@ from app.schemas import (
 
 
 class BlogService:
-    def __init__(self, repo: BlogRepository | None = None, jwt_service: JwtService | None = None):
-        self.repo = repo or BlogRepository()
+    def __init__(self, repo: Any, jwt_service: JwtService | None = None):
+        self.repo = repo
         self.jwt_service = jwt_service or JwtService()
 
-    def login(self, username: str, password: str) -> LoginResponse:
+    async def _call(self, method: Any, *args: Any, **kwargs: Any) -> Any:
+        result = method(*args, **kwargs)
+        if inspect.isawaitable(result):
+            return await result
+        return result
+
+    async def login(self, username: str, password: str) -> LoginResponse:
         if self._blank(username) or self._blank(password):
             raise ValueError("用户名和密码不能为空")
-        user = self.repo.find_user_by_username(username)
+        user = await self._call(self.repo.find_user_by_username, username)
         if not user or not self._verify_password(password, user["passwordHash"]):
             raise ValueError("用户名或密码错误")
 
-        roles = self.repo.list_roles_by_ids(user["roleIds"])
+        roles = await self._call(self.repo.list_roles_by_ids, user["roleIds"])
         resource_ids = []
         seen = set()
         for role in roles:
@@ -39,7 +46,7 @@ class BlogService:
                 if resource_id not in seen:
                     seen.add(resource_id)
                     resource_ids.append(resource_id)
-        resources = self.repo.list_resources_by_ids(resource_ids)
+        resources = await self._call(self.repo.list_resources_by_ids, resource_ids)
         is_admin = any(role["name"] == "admin" for role in roles)
         token = self.jwt_service.issue_token(user["id"], user["username"], user["roleIds"], is_admin)
         return LoginResponse(
@@ -49,140 +56,153 @@ class BlogService:
             resources=resources,
         )
 
-    def register(self, request: RegisterRequest) -> dict:
+    async def register(self, request: RegisterRequest) -> dict:
         if self._blank(request.username) or self._blank(request.password):
             raise ValueError("用户名和密码不能为空")
-        if self.repo.exists_user_by_username(request.username):
+        if await self._call(self.repo.exists_user_by_username, request.username):
             raise ValueError("用户名已存在")
 
-        reader = self.repo.find_role_by_name("reader")
+        reader = await self._call(self.repo.find_role_by_name, "reader")
         if not reader:
             raise ValueError("reader 角色不存在")
 
-        user_id = self.repo.insert_user(
+        user_id = await self._call(
+            self.repo.insert_user,
             request.username,
             request.nickname if not self._blank(request.nickname) else request.username,
             self._hash_password(request.password),
             [reader["id"]],
         )
-        saved = self.repo.find_user_by_id(user_id)
+        saved = await self._call(self.repo.find_user_by_id, user_id)
         if not saved:
             raise RuntimeError("用户创建失败")
         return self._sanitize_user(saved)
 
-    def list_roles(self) -> list[dict]:
-        return self.repo.list_roles()
+    async def list_roles(self) -> list[dict]:
+        return await self._call(self.repo.list_roles)
 
-    def create_role(self, request: RoleRequest) -> dict:
+    async def create_role(self, request: RoleRequest) -> dict:
         if self._blank(request.name):
             raise ValueError("角色名不能为空")
-        if self.repo.exists_role_name(request.name):
+        if await self._call(self.repo.exists_role_name, request.name):
             raise ValueError("角色名已存在")
-        role_id = self.repo.insert_role(
+        role_id = await self._call(
+            self.repo.insert_role,
             request.name,
             request.description or "",
             self._sanitize_long_list(request.resource_ids),
         )
-        role = self.repo.find_role_by_id(role_id)
+        role = await self._call(self.repo.find_role_by_id, role_id)
         if not role:
             raise RuntimeError("角色创建失败")
         return role
 
-    def update_role(self, role_id: int, request: RoleRequest) -> dict:
-        role = self.repo.find_role_by_id(role_id)
+    async def update_role(self, role_id: int, request: RoleRequest) -> dict:
+        role = await self._call(self.repo.find_role_by_id, role_id)
         if not role:
             raise ValueError("角色不存在")
         next_name = role["name"] if self._blank(request.name) else request.name
         next_desc = role["description"] if request.description is None else request.description
-        self.repo.update_role(role_id, next_name, next_desc)
+        await self._call(self.repo.update_role, role_id, next_name, next_desc)
         if request.resource_ids is not None:
-            self.repo.replace_role_resources(role_id, self._sanitize_long_list(request.resource_ids))
-        updated = self.repo.find_role_by_id(role_id)
+            await self._call(
+                self.repo.replace_role_resources,
+                role_id,
+                self._sanitize_long_list(request.resource_ids),
+            )
+        updated = await self._call(self.repo.find_role_by_id, role_id)
         if not updated:
             raise RuntimeError("角色更新失败")
         return updated
 
-    def delete_role(self, role_id: int) -> None:
-        if not self.repo.find_role_by_id(role_id):
+    async def delete_role(self, role_id: int) -> None:
+        if not await self._call(self.repo.find_role_by_id, role_id):
             raise ValueError("角色不存在")
-        self.repo.delete_role(role_id)
+        await self._call(self.repo.delete_role, role_id)
 
-    def list_users(self) -> list[dict]:
-        return [self._sanitize_user(user) for user in self.repo.list_users()]
+    async def list_users(self) -> list[dict]:
+        users = await self._call(self.repo.list_users)
+        return [self._sanitize_user(user) for user in users]
 
-    def create_user(self, request: UserRequest) -> dict:
+    async def create_user(self, request: UserRequest) -> dict:
         if self._blank(request.username) or self._blank(request.password):
             raise ValueError("用户名和密码不能为空")
-        if self.repo.exists_user_by_username(request.username):
+        if await self._call(self.repo.exists_user_by_username, request.username):
             raise ValueError("用户名已存在")
-        user_id = self.repo.insert_user(
+        user_id = await self._call(
+            self.repo.insert_user,
             request.username,
             request.nickname if not self._blank(request.nickname) else request.username,
             self._hash_password(request.password),
             self._sanitize_long_list(request.role_ids),
         )
-        saved = self.repo.find_user_by_id(user_id)
+        saved = await self._call(self.repo.find_user_by_id, user_id)
         if not saved:
             raise RuntimeError("用户创建失败")
         return self._sanitize_user(saved)
 
-    def update_user(self, user_id: int, request: UserRequest) -> dict:
-        existing = self.repo.find_user_by_id(user_id)
+    async def update_user(self, user_id: int, request: UserRequest) -> dict:
+        existing = await self._call(self.repo.find_user_by_id, user_id)
         if not existing:
             raise ValueError("用户不存在")
         nickname = existing["nickname"] if request.nickname is None else request.nickname
         password_hash = existing["passwordHash"]
         if not self._blank(request.password):
             password_hash = self._hash_password(request.password)
-        self.repo.update_user(user_id, nickname, password_hash)
+        await self._call(self.repo.update_user, user_id, nickname, password_hash)
         if request.role_ids is not None:
-            self.repo.replace_user_roles(user_id, self._sanitize_long_list(request.role_ids))
-        updated = self.repo.find_user_by_id(user_id)
+            await self._call(
+                self.repo.replace_user_roles,
+                user_id,
+                self._sanitize_long_list(request.role_ids),
+            )
+        updated = await self._call(self.repo.find_user_by_id, user_id)
         if not updated:
             raise RuntimeError("用户更新失败")
         return self._sanitize_user(updated)
 
-    def delete_user(self, user_id: int) -> None:
-        if not self.repo.find_user_by_id(user_id):
+    async def delete_user(self, user_id: int) -> None:
+        if not await self._call(self.repo.find_user_by_id, user_id):
             raise ValueError("用户不存在")
-        self.repo.delete_user(user_id)
+        await self._call(self.repo.delete_user, user_id)
 
-    def list_resources(self) -> list[dict]:
-        return self.repo.list_resources()
+    async def list_resources(self) -> list[dict]:
+        return await self._call(self.repo.list_resources)
 
-    def create_resource(self, request: ResourceRequest) -> dict:
+    async def create_resource(self, request: ResourceRequest) -> dict:
         if self._blank(request.code) or self._blank(request.name):
             raise ValueError("资源编码和名称不能为空")
-        resource_id = self.repo.insert_resource(request.code, request.name)
-        resource = self.repo.find_resource_by_id(resource_id)
+        resource_id = await self._call(self.repo.insert_resource, request.code, request.name)
+        resource = await self._call(self.repo.find_resource_by_id, resource_id)
         if not resource:
             raise RuntimeError("资源创建失败")
         return resource
 
-    def update_resource(self, resource_id: int, request: ResourceRequest) -> dict:
-        existing = self.repo.find_resource_by_id(resource_id)
+    async def update_resource(self, resource_id: int, request: ResourceRequest) -> dict:
+        existing = await self._call(self.repo.find_resource_by_id, resource_id)
         if not existing:
             raise ValueError("资源不存在")
         next_code = existing["code"] if self._blank(request.code) else request.code
         next_name = existing["name"] if self._blank(request.name) else request.name
-        self.repo.update_resource(resource_id, next_code, next_name)
-        updated = self.repo.find_resource_by_id(resource_id)
+        await self._call(self.repo.update_resource, resource_id, next_code, next_name)
+        updated = await self._call(self.repo.find_resource_by_id, resource_id)
         if not updated:
             raise RuntimeError("资源更新失败")
         return updated
 
-    def delete_resource(self, resource_id: int) -> None:
-        if not self.repo.find_resource_by_id(resource_id):
+    async def delete_resource(self, resource_id: int) -> None:
+        if not await self._call(self.repo.find_resource_by_id, resource_id):
             raise ValueError("资源不存在")
-        self.repo.delete_resource(resource_id)
+        await self._call(self.repo.delete_resource, resource_id)
 
-    def list_admin_articles(self) -> list[dict]:
-        return self.repo.list_admin_articles()
+    async def list_admin_articles(self) -> list[dict]:
+        return await self._call(self.repo.list_admin_articles)
 
-    def create_article(self, request: ArticleRequest, principal: AuthPrincipal) -> dict:
+    async def create_article(self, request: ArticleRequest, principal: AuthPrincipal) -> dict:
         if self._blank(request.title) or self._blank(request.content):
             raise ValueError("文章标题和内容不能为空")
-        article_id = self.repo.insert_article(
+        article_id = await self._call(
+            self.repo.insert_article,
             request.title,
             request.summary or "",
             request.content,
@@ -190,16 +210,17 @@ class BlogService:
             request.published if request.published is not None else True,
             datetime.now(timezone.utc).replace(tzinfo=None),
         )
-        article = self.repo.find_article_by_id(article_id)
+        article = await self._call(self.repo.find_article_by_id, article_id)
         if not article:
             raise RuntimeError("文章创建失败")
         return article
 
-    def update_article(self, article_id: int, request: ArticleRequest) -> dict:
-        existing = self.repo.find_article_by_id(article_id)
+    async def update_article(self, article_id: int, request: ArticleRequest) -> dict:
+        existing = await self._call(self.repo.find_article_by_id, article_id)
         if not existing:
             raise ValueError("文章不存在")
-        self.repo.update_article(
+        await self._call(
+            self.repo.update_article,
             article_id,
             request.title if request.title is not None else existing["title"],
             request.summary if request.summary is not None else existing.get("summary"),
@@ -207,86 +228,88 @@ class BlogService:
             request.author if request.author is not None else existing.get("author"),
             request.published if request.published is not None else existing["published"],
         )
-        updated = self.repo.find_article_by_id(article_id)
+        updated = await self._call(self.repo.find_article_by_id, article_id)
         if not updated:
             raise RuntimeError("文章更新失败")
         return updated
 
-    def delete_article(self, article_id: int) -> None:
-        if not self.repo.find_article_by_id(article_id):
+    async def delete_article(self, article_id: int) -> None:
+        if not await self._call(self.repo.find_article_by_id, article_id):
             raise ValueError("文章不存在")
-        self.repo.delete_article(article_id)
+        await self._call(self.repo.delete_article, article_id)
 
-    def list_banned_words(self) -> list[dict]:
-        return self.repo.list_banned_words()
+    async def list_banned_words(self) -> list[dict]:
+        return await self._call(self.repo.list_banned_words)
 
-    def create_banned_word(self, request: BannedWordRequest) -> dict:
+    async def create_banned_word(self, request: BannedWordRequest) -> dict:
         if self._blank(request.word):
             raise ValueError("违禁词不能为空")
-        banned_word_id = self.repo.insert_banned_word(request.word)
-        for item in self.repo.list_banned_words():
+        banned_word_id = await self._call(self.repo.insert_banned_word, request.word)
+        for item in await self._call(self.repo.list_banned_words):
             if item["id"] == banned_word_id:
                 return item
         raise RuntimeError("违禁词创建失败")
 
-    def delete_banned_word(self, banned_word_id: int) -> None:
-        if not any(item["id"] == banned_word_id for item in self.repo.list_banned_words()):
+    async def delete_banned_word(self, banned_word_id: int) -> None:
+        words = await self._call(self.repo.list_banned_words)
+        if not any(item["id"] == banned_word_id for item in words):
             raise ValueError("违禁词不存在")
-        self.repo.delete_banned_word(banned_word_id)
+        await self._call(self.repo.delete_banned_word, banned_word_id)
 
-    def list_admin_comments(self) -> list[dict]:
-        return self.repo.list_admin_comments()
+    async def list_admin_comments(self) -> list[dict]:
+        return await self._call(self.repo.list_admin_comments)
 
-    def delete_comment(self, comment_id: int) -> None:
-        if not self.repo.find_comment_by_id(comment_id):
+    async def delete_comment(self, comment_id: int) -> None:
+        if not await self._call(self.repo.find_comment_by_id, comment_id):
             raise ValueError("评论不存在")
-        self.repo.delete_comment(comment_id)
+        await self._call(self.repo.delete_comment, comment_id)
 
-    def list_public_articles(self) -> list[dict]:
-        return self.repo.list_public_articles()
+    async def list_public_articles(self) -> list[dict]:
+        return await self._call(self.repo.list_public_articles)
 
-    def top10_articles(self) -> list[dict]:
-        return self.repo.top10_articles()
+    async def top10_articles(self) -> list[dict]:
+        return await self._call(self.repo.top10_articles)
 
-    def article_detail(self, article_id: int) -> dict:
-        if not self.repo.find_published_article_by_id(article_id):
+    async def article_detail(self, article_id: int) -> dict:
+        if not await self._call(self.repo.find_published_article_by_id, article_id):
             raise ValueError("文章不存在")
-        self.repo.increment_article_views(article_id)
-        article = self.repo.find_published_article_by_id(article_id)
+        await self._call(self.repo.increment_article_views, article_id)
+        article = await self._call(self.repo.find_published_article_by_id, article_id)
         if not article:
             raise ValueError("文章不存在")
-        comments = self.repo.list_comments_by_article_id(article_id)
+        comments = await self._call(self.repo.list_comments_by_article_id, article_id)
         return {"article": article, "comments": comments}
 
-    def create_comment(
+    async def create_comment(
         self, article_id: int, request: CommentRequest, principal: AuthPrincipal
     ) -> dict:
         if self._blank(request.content):
             raise ValueError("评论内容不能为空")
-        if not self.repo.find_published_article_by_id(article_id):
+        if not await self._call(self.repo.find_published_article_by_id, article_id):
             raise ValueError("文章不存在")
 
-        for word in self.repo.list_banned_words():
+        for word in await self._call(self.repo.list_banned_words):
             if word["word"] in request.content:
                 raise ValueError(f"评论包含违禁词: {word['word']}")
 
-        user = self.repo.find_user_by_id(principal.user_id)
+        user = await self._call(self.repo.find_user_by_id, principal.user_id)
         if not user:
             raise ValueError("用户不存在")
 
-        comment_id = self.repo.insert_comment(
+        comment_id = await self._call(
+            self.repo.insert_comment,
             article_id,
             user["id"],
             user["username"],
             request.content,
             datetime.now(timezone.utc).replace(tzinfo=None),
         )
-        comment = self.repo.find_comment_by_id(comment_id)
+        comment = await self._call(self.repo.find_comment_by_id, comment_id)
         if not comment:
             raise RuntimeError("评论创建失败")
         return comment
 
-    def weather(self, city: str | None) -> dict:
+    async def weather(self, city: str | None) -> dict:
         final_city = "上海市" if self._blank(city) else city
         now = datetime.now(timezone.utc)
         return {

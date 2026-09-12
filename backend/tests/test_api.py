@@ -1,11 +1,16 @@
 import os
+import sys
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+
 
 @pytest.fixture(scope="module")
 def client() -> TestClient:
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from main import app
 
     return TestClient(app)
