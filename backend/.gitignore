@@ -1,6 +1,7 @@
 data/*.db
 node_modules/
 .wrangler/
+worker-configuration.d.ts
 python_modules/
 pylock.toml
 .venv/
