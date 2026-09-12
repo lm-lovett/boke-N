@@ -3,7 +3,7 @@
 博客网站（前端 H5 + 后台管理端）版本，主技术栈已切换为：
 
 - 前端：Vue 3 + Vite
-- 后端：Java 21 + Spring Boot
+- 后端：Python 3 + FastAPI
 
 ## 功能说明
 
@@ -31,7 +31,7 @@
 ## 项目结构
 
 ```text
-backend/   Spring Boot API 服务
+backend/   FastAPI API 服务
 frontend/  Vue 前端（含管理端与 H5）
 db/mysql/  MySQL 建表与初始化脚本
 ```
@@ -56,11 +56,12 @@ mysql -uroot -p < db/mysql/002_seed.sql
 
 ## 快速启动
 
-### 1) 启动后端（Spring Boot）
+### 1) 启动后端（FastAPI）
 
 ```bash
 cd backend
-./mvnw spring-boot:run
+pip install -r requirements.txt
+python -m uvicorn main:app --host 0.0.0.0 --port 8080
 ```
 
 默认端口：`8080`
@@ -68,9 +69,12 @@ cd backend
 若需指定数据库连接，可设置环境变量：
 
 ```bash
-export SPRING_DATASOURCE_URL="jdbc:mysql://127.0.0.1:3306/boke_n?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=utf8"
-export SPRING_DATASOURCE_USERNAME="root"
-export SPRING_DATASOURCE_PASSWORD=""
+export DB_HOST="127.0.0.1"
+export DB_PORT="3306"
+export DB_NAME="boke_n"
+export DB_USER="root"
+export DB_PASSWORD=""
+export APP_JWT_SECRET="blog-secret-key-change-me-please-use-env"
 ```
 
 ### 2) 启动前端（Vue）
@@ -95,12 +99,12 @@ npm run dev
 
 ## 已验证
 
-- 后端：`./mvnw test` 通过
+- 后端：`python -m pytest tests/test_api.py` 通过
 - 前端：`npm run build` 通过
 - API 烟测通过（登录、文章创建、评论、Top10、天气兜底）
 - MySQL 实库联调通过（数据实际写入 `users/articles/comments`）
 
 ## 后续建议
 
-- 当前已切换为 MySQL JDBC 持久化，后续可升级为 MySQL/PostgreSQL + JPA 或 MyBatis。
+- 当前已切换为 MySQL + PyMySQL 持久化，后续可引入 SQLAlchemy 或迁移到 PostgreSQL。
 - 天气接口当前为演示数据，后续可接入真实天气 API。
