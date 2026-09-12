@@ -1,0 +1,24 @@
+[project]
+name = "boke-n-backend"
+version = "0.1.0"
+description = "boke-N blog API on Cloudflare Python Workers + D1"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi",
+    "bcrypt",
+    "pyjwt",
+    "pydantic",
+]
+
+[dependency-groups]
+dev = [
+    "workers-py>=1.72.0",
+    "workers-runtime-sdk",
+    "uvicorn",
+    "httpx",
+    "pytest",
+]
+
+# pywrangler reads [project].dependencies and packages them for Workers deploy.
+# Run: uv sync && uv run pywrangler dev | deploy

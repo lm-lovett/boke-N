@@ -3,7 +3,7 @@
 博客网站（前端 H5 + 后台管理端）版本，主技术栈已切换为：
 
 - 前端：Vue 3 + Vite
-- 后端：Java 21 + Spring Boot
+- 后端：Python 3 + FastAPI（Cloudflare Workers + D1）
 
 ## 功能说明
 
@@ -31,49 +31,69 @@
 ## 项目结构
 
 ```text
-backend/   Spring Boot API 服务
+backend/   FastAPI API（Cloudflare Worker 入口在 src/index.py）
 frontend/  Vue 前端（含管理端与 H5）
-db/mysql/  MySQL 建表与初始化脚本
+db/sqlite/ SQLite 脚本（本地开发）
+backend/migrations/ D1 迁移脚本（Cloudflare 部署）
 ```
 
-## 数据库脚本（MySQL）
+## 后端部署（Cloudflare Python Workers + D1）
 
-已提供完整数据库脚本：
+> Python Workers 目前为 **open beta**，需使用 **pywrangler** CLI 部署。
 
-- `db/mysql/001_schema.sql`：建库建表（RBAC + 文章 + 评论 + 违禁词）
-- `db/mysql/002_seed.sql`：初始化角色、资源、账号关系、违禁词、演示数据
+### 前置要求
 
-执行方式示例：
+- [uv](https://docs.astral.sh/uv/) **>= 0.29.8**
+- [Node.js](https://nodejs.org/)
+- wrangler **>= 4.64.0**
 
-```bash
-mysql -uroot -p < db/mysql/001_schema.sql
-mysql -uroot -p < db/mysql/002_seed.sql
-```
+Windows 用户若 `pywrangler dev` 报 `No module named 'python'`，请先执行 `uv self update` 并清理 `backend/.venv-workers`，详见 [`backend/README.md`](backend/README.md#windows-故障排除)。
 
-> `002_seed.sql` 已提供可直接使用的 bcrypt 密码（可直接登录）：
-> - admin / Admin123!
-> - demo / Demo123!
-
-## 快速启动
-
-### 1) 启动后端（Spring Boot）
+### 部署流程
 
 ```bash
 cd backend
-./mvnw spring-boot:run
+
+# 1. 安装依赖（项目已初始化，无需再执行 pywrangler init）
+uv sync
+
+# 2. 初始化 D1（首次部署）
+npx wrangler d1 execute boke-n-db --remote --file=./migrations/0001_schema.sql
+npx wrangler d1 execute boke-n-db --remote --file=./migrations/0002_seed.sql
+
+# 3. 本地开发
+uv run pywrangler dev          # http://localhost:8787
+
+# 4. 部署到 Cloudflare（需 wrangler login）
+uv run pywrangler deploy
 ```
 
-默认端口：`8080`
+依赖在 `backend/pyproject.toml` 中管理；`uv run pywrangler dev/deploy` 会自动同步并打包兼容的 Python 包。
 
-若需指定数据库连接，可设置环境变量：
+> 种子数据已提供可直接使用的 bcrypt 密码：
+> - admin / Admin123!
+> - demo / Demo123!
+
+更多细节见 [`backend/README.md`](backend/README.md)。
+
+### 本地备用：uvicorn + SQLite
 
 ```bash
-export SPRING_DATASOURCE_URL="jdbc:mysql://127.0.0.1:3306/boke_n?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=utf8"
-export SPRING_DATASOURCE_USERNAME="root"
-export SPRING_DATASOURCE_PASSWORD=""
+cd backend
+uv sync
+uv run uvicorn main:app --host 0.0.0.0 --port 8080
 ```
 
-### 2) 启动前端（Vue）
+可选环境变量：
+
+```bash
+export SQLITE_PATH="backend/data/boke_n.db"
+export APP_JWT_SECRET="blog-secret-key-change-me-please-use-env"
+```
+
+## 快速启动（前端）
+
+### 1) 启动前端（Vue）
 
 ```bash
 cd frontend
@@ -83,7 +103,7 @@ npm run dev
 
 默认端口：`5173`
 
-### 3) 访问地址
+### 2) 访问地址
 
 - H5 前端：`http://localhost:5173/`
 - 管理端：`http://localhost:5173/?view=admin`
@@ -95,12 +115,12 @@ npm run dev
 
 ## 已验证
 
-- 后端：`./mvnw test` 通过
+- 后端：`python -m pytest tests/test_api.py` 通过
 - 前端：`npm run build` 通过
 - API 烟测通过（登录、文章创建、评论、Top10、天气兜底）
-- MySQL 实库联调通过（数据实际写入 `users/articles/comments`）
+- Cloudflare D1 / 本地 SQLite 联调通过（数据实际写入 `users/articles/comments`）
 
 ## 后续建议
 
-- 当前已切换为 MySQL JDBC 持久化，后续可升级为 MySQL/PostgreSQL + JPA 或 MyBatis。
+- 生产环境使用 Cloudflare D1；本地开发可继续使用 SQLite 或 `wrangler d1 --local`。
 - 天气接口当前为演示数据，后续可接入真实天气 API。

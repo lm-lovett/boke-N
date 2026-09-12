@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "boke-n-backend",
+  "main": "src/index.py",
+  "compatibility_date": "2026-09-07",
+  "compatibility_flags": ["python_workers", "disable_python_external_sdk"],
+  "d1_databases": [
+    {
+      "binding": "MY_DB",
+      "database_name": "boke-n-db",
+      "database_id": "0820e294-1a38-44a6-89df-481cb59a9e8b"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}
