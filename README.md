@@ -31,7 +31,7 @@
 ## 项目结构
 
 ```text
-backend/   FastAPI API（Cloudflare Worker 入口在 src/main.py）
+backend/   FastAPI API（Cloudflare Worker 入口在 src/index.py）
 frontend/  Vue 前端（含管理端与 H5）
 db/sqlite/ SQLite 脚本（本地开发）
 backend/migrations/ D1 迁移脚本（Cloudflare 部署）

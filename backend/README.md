@@ -24,7 +24,7 @@ uv sync
 
 ```text
 backend/
-  src/main.py          # Worker 入口（Default = asgi.entrypoint(app)）
+  src/index.py         # Worker 入口（Default = asgi.entrypoint(app)）
   src/app/             # FastAPI 应用与 D1/SQLite 数据层
   wrangler.jsonc       # Worker + D1 绑定配置
   pyproject.toml       # 运行时依赖与 workers-py 开发依赖
