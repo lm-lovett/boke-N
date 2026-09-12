@@ -1,6 +1,10 @@
 data/*.db
 node_modules/
 .wrangler/
+python_modules/
+pylock.toml
+.venv/
+uv.lock
 __pycache__/
 *.py[cod]
 *.egg-info/
