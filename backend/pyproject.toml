@@ -19,3 +19,6 @@ dev = [
     "httpx",
     "pytest",
 ]
+
+# pywrangler reads [project].dependencies and packages them for Workers deploy.
+# Run: uv sync && uv run pywrangler dev | deploy

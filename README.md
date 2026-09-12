@@ -37,42 +37,43 @@ db/sqlite/ SQLite 脚本（本地开发）
 backend/migrations/ D1 迁移脚本（Cloudflare 部署）
 ```
 
-## 数据库（Cloudflare D1）
+## 后端部署（Cloudflare Python Workers + D1）
 
-生产环境使用 Cloudflare D1，Worker 通过 `env.MY_DB` 绑定访问数据库。
+> Python Workers 目前为 **open beta**，需使用 **pywrangler** CLI 部署。
 
-初始化远程 D1：
+### 前置要求
+
+- [uv](https://docs.astral.sh/uv/)（Python 包管理器）
+- [Node.js](https://nodejs.org/)
+
+### 部署流程
 
 ```bash
 cd backend
+
+# 1. 安装依赖（项目已初始化，无需再执行 pywrangler init）
+uv sync
+
+# 2. 初始化 D1（首次部署）
 npx wrangler d1 execute boke-n-db --remote --file=./migrations/0001_schema.sql
 npx wrangler d1 execute boke-n-db --remote --file=./migrations/0002_seed.sql
-```
 
-> 种子数据已提供可直接使用的 bcrypt 密码（可直接登录）：
-> - admin / Admin123!
-> - demo / Demo123!
+# 3. 本地开发
+uv run pywrangler dev          # http://localhost:8787
 
-## 快速启动
-
-### 1) 启动后端（Cloudflare Worker 本地开发）
-
-```bash
-cd backend
-uv sync
-uv run pywrangler dev
-```
-
-默认端口：`8787`
-
-部署到 Cloudflare：
-
-```bash
-cd backend
+# 4. 部署到 Cloudflare（需 wrangler login）
 uv run pywrangler deploy
 ```
 
-### 1b) 本地备用：uvicorn + SQLite
+依赖在 `backend/pyproject.toml` 中管理；`uv run pywrangler dev/deploy` 会自动同步并打包兼容的 Python 包。
+
+> 种子数据已提供可直接使用的 bcrypt 密码：
+> - admin / Admin123!
+> - demo / Demo123!
+
+更多细节见 [`backend/README.md`](backend/README.md)。
+
+### 本地备用：uvicorn + SQLite
 
 ```bash
 cd backend
@@ -87,7 +88,9 @@ export SQLITE_PATH="backend/data/boke_n.db"
 export APP_JWT_SECRET="blog-secret-key-change-me-please-use-env"
 ```
 
-### 2) 启动前端（Vue）
+## 快速启动（前端）
+
+### 1) 启动前端（Vue）
 
 ```bash
 cd frontend
@@ -97,7 +100,7 @@ npm run dev
 
 默认端口：`5173`
 
-### 3) 访问地址
+### 2) 访问地址
 
 - H5 前端：`http://localhost:5173/`
 - 管理端：`http://localhost:5173/?view=admin`
