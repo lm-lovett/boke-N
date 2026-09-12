@@ -9,7 +9,7 @@ Python FastAPI API，生产环境部署在 **Cloudflare Python Workers + D1**（
 - [uv](https://docs.astral.sh/uv/) **>= 0.29.8**（Python 包管理器，Windows 需此版本以上才支持 Pyodide）
 - [Node.js](https://nodejs.org/)（pywrangler 会代理 wrangler CLI）
 - [wrangler](https://developers.cloudflare.com/workers/wrangler/) **>= 4.64.0**（`npm install -g wrangler@latest`）
-- **workers-py >= 1.72.0**（已写入 `pyproject.toml` 的 dev 依赖）
+- **workers-py**（已写入 `pyproject.toml` 的 dev 依赖；Windows 建议配合 uv >= 0.29.8）
 
 Windows 上建议先升级工具链：
 
