@@ -1028,3 +1028,248 @@ button.ghost-dark:disabled:hover {
     text-align: center;
   }
 }
+
+/* ---------- 富文本编辑器（后台，wangEditor） ---------- */
+
+.editor-field {
+  display: grid;
+  gap: 6px;
+}
+
+.editor-field-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
+/* 编辑器 DOM 由 JS 动态生成，scoped 样式覆盖不到，统一在这里调主题 */
+.rich-editor {
+  --w-e-toolbar-bg-color: var(--surface-2);
+  --w-e-toolbar-color: var(--ink-2);
+  --w-e-toolbar-active-color: var(--primary);
+  --w-e-toolbar-active-bg-color: var(--primary-soft);
+  --w-e-toolbar-border-color: var(--line);
+  --w-e-textarea-bg-color: var(--surface);
+  --w-e-textarea-color: var(--ink);
+  --w-e-textarea-border-color: var(--line);
+  --w-e-textarea-slight-bg-color: var(--surface-2);
+  --w-e-textarea-slight-color: var(--muted);
+  --w-e-textarea-selected-border-color: var(--primary);
+  --w-e-textarea-handler-bg-color: var(--primary);
+}
+
+.rich-editor .w-e-bar {
+  flex-wrap: wrap;
+  row-gap: 2px;
+}
+
+.rich-editor .w-e-text-container {
+  min-height: 320px;
+}
+
+.rich-editor .w-e-text-container [data-slate-editor] {
+  min-height: 320px;
+  padding: 12px 16px;
+  font-size: 15px;
+  line-height: 1.8;
+}
+
+.rich-editor .w-e-text-container [data-slate-editor] p {
+  margin: 0 0 0.6em;
+}
+
+/* ---------- 富文本正文（前台） ---------- */
+
+.article-body {
+  margin: 0 0 20px;
+}
+
+.rich-text {
+  font-size: 17px;
+  line-height: 1.85;
+  color: var(--ink-2);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.rich-text > *:first-child {
+  margin-top: 0;
+}
+
+.rich-text > *:last-child {
+  margin-bottom: 0;
+}
+
+.rich-text p {
+  margin: 0 0 1.05em;
+}
+
+.rich-text h1,
+.rich-text h2,
+.rich-text h3,
+.rich-text h4 {
+  color: var(--ink);
+  line-height: 1.35;
+  margin: 1.6em 0 0.7em;
+  font-weight: 600;
+}
+
+.rich-text h1 { font-size: 1.6em; }
+.rich-text h2 { font-size: 1.4em; }
+.rich-text h3 { font-size: 1.22em; }
+.rich-text h4 { font-size: 1.08em; }
+
+.rich-text a {
+  color: var(--primary);
+  text-decoration: none;
+  border-bottom: 1px solid var(--primary-border);
+}
+
+.rich-text a:hover {
+  color: var(--primary-hover);
+  border-bottom-color: var(--primary);
+}
+
+.rich-text strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.rich-text ul,
+.rich-text ol {
+  margin: 0 0 1.05em;
+  padding-left: 1.4em;
+}
+
+.rich-text li {
+  margin: 0.3em 0;
+}
+
+.rich-text blockquote {
+  margin: 1.2em 0;
+  padding: 4px 0 4px 16px;
+  border-left: 3px solid var(--primary-border);
+  color: var(--muted);
+  font-style: normal;
+}
+
+.rich-text hr {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 1.8em 0;
+}
+
+.rich-text img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 0.6em 0;
+  display: block;
+}
+
+.rich-text code {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.88em;
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: 5px;
+  padding: 1px 5px;
+  color: var(--ink);
+}
+
+.rich-text pre {
+  background: #1e1b4b;
+  color: #e5e7eb;
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin: 1.2em 0;
+  overflow-x: auto;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.rich-text pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+  color: inherit;
+}
+
+.rich-text table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.2em 0;
+  font-size: 0.94em;
+  display: block;
+  overflow-x: auto;
+}
+
+.rich-text th,
+.rich-text td {
+  border: 1px solid var(--line);
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.rich-text th {
+  background: var(--surface-2);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* prism token 配色：配合深色代码块的浅色高亮 */
+.rich-text .token.comment,
+.rich-text .token.prolog,
+.rich-text .token.doctype,
+.rich-text .token.cdata {
+  color: #94a3b8;
+}
+
+.rich-text .token.punctuation {
+  color: #cbd5e1;
+}
+
+.rich-text .token.property,
+.rich-text .token.tag,
+.rich-text .token.symbol,
+.rich-text .token.deleted {
+  color: #f9a8d4;
+}
+
+.rich-text .token.function,
+.rich-text .token.class-name {
+  color: #93c5fd;
+}
+
+.rich-text .token.keyword,
+.rich-text .token.operator,
+.rich-text .token.boolean,
+.rich-text .token.number {
+  color: #c4b5fd;
+}
+
+.rich-text .token.string,
+.rich-text .token.attr-value,
+.rich-text .token.char {
+  color: #86efac;
+}
+
+.rich-text .token.attr-name,
+.rich-text .token.selector,
+.rich-text .token.regex,
+.rich-text .token.important,
+.rich-text .token.variable {
+  color: #fcd34d;
+}
+
+@media (max-width: 640px) {
+  .rich-text {
+    font-size: 16px;
+  }
+
+  .rich-editor .w-e-text-container,
+  .rich-editor .w-e-text-container [data-slate-editor] {
+    min-height: 240px;
+  }
+}

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, defineAsyncComponent, onMounted, reactive, ref } from 'vue';
 import {
   BookOpen,
   User,
@@ -22,11 +22,16 @@ import {
   LayoutGrid
 } from 'lucide-vue-next';
 import { ApiError, request } from './lib/request.js';
+import { stripHtml } from './lib/richText.js';
 import { createTask } from './composables/useTask.js';
 import TopProgress from './components/TopProgress.vue';
 import Skeleton from './components/Skeleton.vue';
 import LoadingOverlay from './components/LoadingOverlay.vue';
 import StateBlock from './components/StateBlock.vue';
+import RichTextView from './components/RichTextView.vue';
+
+// 编辑器体积较大，且只有进入"文章管理"才用得上，拆包按需加载
+const RichTextEditor = defineAsyncComponent(() => import('./components/RichTextEditor.vue'));
 
 const view = new URLSearchParams(window.location.search).get('view') === 'admin' ? 'admin' : 'h5';
 
@@ -72,7 +77,10 @@ const state = reactive({
   loginForm: { username: '', password: '' },
   registerForm: { username: '', password: '' },
   adminLoginForm: { username: '', password: '' },
-  commentText: ''
+  commentText: '',
+
+  // 文章正文来自富文本编辑器（HTML），不参与 FormData，单独维护
+  adminArticleContent: ''
 });
 
 const authModal = reactive({
@@ -147,6 +155,9 @@ async function fetchAdminSection(signal, sectionKey) {
 async function postAdminSection(signal, { endpoint, body, form }) {
   await request(endpoint, { method: 'POST', body: JSON.stringify(body) }, state.adminToken, { signal });
   form.reset();
+  if (state.adminSection === 'articles') {
+    state.adminArticleContent = '';
+  }
   state.adminMessage = '保存成功';
   await fetchAdminSection(signal, state.adminSection);
 }
@@ -246,7 +257,7 @@ function buildAdminBody(form) {
     return {
       title: form.get('title'),
       summary: form.get('summary'),
-      content: form.get('content'),
+      content: state.adminArticleContent,
       author: form.get('author'),
       published: form.get('published') === 'on'
     };
@@ -264,6 +275,11 @@ function onAdminSubmit(event) {
   }
   const menu = menus.find((m) => m.key === state.adminSection);
   if (!menu || state.adminSection === 'comments') {
+    return;
+  }
+  // 富文本编辑器不在表单里，required 管不到，这里补一道非空校验
+  if (state.adminSection === 'articles' && !stripHtml(state.adminArticleContent)) {
+    state.adminMessage = '请填写文章正文';
     return;
   }
   const body = buildAdminBody(new FormData(event.target));
@@ -563,7 +579,15 @@ onMounted(() => {
                     <label>作者 <input name="author" :disabled="adminSaveLoading" /></label>
                     <label>摘要 <input name="summary" :disabled="adminSaveLoading" /></label>
                   </div>
-                  <label>内容 <textarea name="content" rows="5" required :disabled="adminSaveLoading"></textarea></label>
+                  <div class="editor-field">
+                    <span class="editor-field-label">正文</span>
+                    <RichTextEditor
+                      v-model="state.adminArticleContent"
+                      :disabled="adminSaveLoading"
+                      :token="state.adminToken"
+                      @notice="(msg) => (state.adminMessage = msg)"
+                    />
+                  </div>
                   <div class="form-footer">
                     <label class="row" style="gap:6px; font-weight:400">
                       <input name="published" type="checkbox" checked style="width:auto" :disabled="adminSaveLoading" /> 立即发布
@@ -730,7 +754,7 @@ onMounted(() => {
               <span><User :size="12" /> {{ state.h5CurrentDetail.article.author }}</span>
               <span><Eye :size="12" /> {{ state.h5CurrentDetail.article.views }}</span>
             </div>
-            <pre class="pre-content">{{ state.h5CurrentDetail.article.content }}</pre>
+            <RichTextView :content="state.h5CurrentDetail.article.content" class="article-body" />
 
             <div class="comment-editor">
               <h4 style="margin:0 0 10px; display:flex; align-items:center; gap:6px">
