@@ -22,7 +22,7 @@ import {
   LayoutGrid
 } from 'lucide-vue-next';
 
-const apiBase = import.meta.env.VITE_API_BASE || 'http://localhost:8080';
+const apiBase = import.meta.env.VITE_API_BASE ?? '';
 const view = new URLSearchParams(window.location.search).get('view') === 'admin' ? 'admin' : 'h5';
 
 const menus = [
@@ -94,6 +94,9 @@ async function request(path, options = {}, token = '') {
   }
   const res = await fetch(`${apiBase}${path}`, { ...options, headers });
   const raw = await res.text();
+  if (raw.trimStart().startsWith('<')) {
+    throw new Error('接口返回异常，请稍后重试');
+  }
   const payload = raw ? JSON.parse(raw) : null;
   if (!res.ok) {
     throw new Error(payload?.message || '请求失败');
