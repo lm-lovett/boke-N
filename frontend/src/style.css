@@ -335,6 +335,61 @@ label {
   flex-wrap: wrap;
 }
 
+.check-field {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+}
+
+.check-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
+.check-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.check-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 400;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.check-item:hover {
+  border-color: var(--primary-border);
+  background: var(--primary-soft);
+}
+
+.check-item:has(input:checked) {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.check-item input {
+  width: auto;
+  margin: 0;
+}
+
+.check-item input:focus {
+  box-shadow: none;
+}
+
+.check-item:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
 .hint {
   background: var(--primary-soft);
   border: 1px solid var(--primary-border);

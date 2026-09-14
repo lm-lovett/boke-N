@@ -39,8 +39,8 @@ const menus = [
   { key: 'comments', label: '评论记录管理', icon: MessagesSquare, endpoint: '/api/admin/comments' }
 ];
 
-// 分区要展示的关联数据：与列表请求并行拉取，避免两轮串行等待
-const hintEndpoints = {
+// 分区要展示的关联选项：与列表请求并行拉取，避免两轮串行等待
+const optionEndpoints = {
   roles: '/api/admin/resources',
   users: '/api/admin/roles'
 };
@@ -51,7 +51,7 @@ const state = reactive({
   adminUser: null,
   adminSection: 'roles',
   adminRows: [],
-  adminHint: '',
+  adminOptions: [],
   adminMessage: '',
 
   h5Token: localStorage.getItem('h5_token') || '',
@@ -123,7 +123,7 @@ function handleAuthExpired(message = '登录已失效，请重新登录') {
   state.adminToken = '';
   state.adminUser = null;
   state.adminRows = [];
-  state.adminHint = '';
+  state.adminOptions = [];
   state.adminMessage = message;
   saveAdminSession();
 }
@@ -135,13 +135,13 @@ async function fetchAdminSection(signal, sectionKey) {
   if (!menu) {
     return;
   }
-  const depEndpoint = hintEndpoints[sectionKey];
+  const depEndpoint = optionEndpoints[sectionKey];
   const [rows, dep] = await Promise.all([
     request(menu.endpoint, {}, state.adminToken, { signal }),
     depEndpoint ? request(depEndpoint, {}, state.adminToken, { signal }) : Promise.resolve(null)
   ]);
   state.adminRows = rows || [];
-  state.adminHint = dep ? dep.map((r) => `${r.id}:${r.name}`).join(' / ') : '';
+  state.adminOptions = Array.isArray(dep) ? dep : [];
 }
 
 async function postAdminSection(signal, { endpoint, body, form }) {
@@ -200,7 +200,7 @@ function switchAdminSection(key) {
   state.adminSection = key;
   // 不同分区列结构不同，切换时先清空，避免旧数据残留被误读
   state.adminRows = [];
-  state.adminHint = '';
+  state.adminOptions = [];
   runAdminList(key);
 }
 
@@ -212,9 +212,22 @@ function adminLogout() {
   state.adminToken = '';
   state.adminUser = null;
   state.adminRows = [];
-  state.adminHint = '';
+  state.adminOptions = [];
   state.adminMessage = '已退出';
   saveAdminSession();
+}
+
+function collectIds(form, key) {
+  return form
+    .getAll(key)
+    .map((v) => Number(v))
+    .filter((v) => Number.isInteger(v) && v > 0);
+}
+
+function namesByIds(ids) {
+  const map = new Map(state.adminOptions.map((opt) => [opt.id, opt.name]));
+  const names = (ids || []).map((id) => map.get(id) || `#${id}`);
+  return names.length ? names.join('、') : '—';
 }
 
 function buildAdminBody(form) {
@@ -222,10 +235,7 @@ function buildAdminBody(form) {
     return {
       name: form.get('name'),
       description: form.get('description'),
-      resourceIds: String(form.get('resourceIds') || '')
-        .split(',')
-        .map((v) => Number(v.trim()))
-        .filter((v) => Number.isInteger(v) && v > 0)
+      resourceIds: collectIds(form, 'resourceIds')
     };
   }
   if (state.adminSection === 'users') {
@@ -233,10 +243,7 @@ function buildAdminBody(form) {
       username: form.get('username'),
       nickname: form.get('nickname'),
       password: form.get('password'),
-      roleIds: String(form.get('roleIds') || '')
-        .split(',')
-        .map((v) => Number(v.trim()))
-        .filter((v) => Number.isInteger(v) && v > 0)
+      roleIds: collectIds(form, 'roleIds')
     };
   }
   if (state.adminSection === 'resources') {
@@ -542,14 +549,32 @@ onMounted(() => {
                 <div class="grid two" v-if="state.adminSection === 'roles'">
                   <label>角色名 <input name="name" required :disabled="adminSaveLoading" /></label>
                   <label>描述 <input name="description" :disabled="adminSaveLoading" /></label>
-                  <label>资源ID <input name="resourceIds" placeholder="1,2,3" :disabled="adminSaveLoading" /></label>
+                  <div class="check-field">
+                    <span class="check-label">资源</span>
+                    <p v-if="!adminListLoading && state.adminOptions.length === 0" class="muted">暂无资源可选</p>
+                    <div v-else class="check-group">
+                      <label v-for="opt in state.adminOptions" :key="opt.id" class="check-item">
+                        <input type="checkbox" name="resourceIds" :value="opt.id" :disabled="adminSaveLoading" />
+                        {{ opt.name }}
+                      </label>
+                    </div>
+                  </div>
                 </div>
 
                 <div class="grid two" v-else-if="state.adminSection === 'users'">
                   <label>用户名 <input name="username" required :disabled="adminSaveLoading" /></label>
                   <label>昵称 <input name="nickname" :disabled="adminSaveLoading" /></label>
                   <label>密码 <input name="password" type="password" required :disabled="adminSaveLoading" /></label>
-                  <label>角色ID <input name="roleIds" placeholder="1,2" :disabled="adminSaveLoading" /></label>
+                  <div class="check-field">
+                    <span class="check-label">角色</span>
+                    <p v-if="!adminListLoading && state.adminOptions.length === 0" class="muted">暂无角色可选</p>
+                    <div v-else class="check-group">
+                      <label v-for="opt in state.adminOptions" :key="opt.id" class="check-item">
+                        <input type="checkbox" name="roleIds" :value="opt.id" :disabled="adminSaveLoading" />
+                        {{ opt.name }}
+                      </label>
+                    </div>
+                  </div>
                 </div>
 
                 <div class="grid two" v-else-if="state.adminSection === 'resources'">
@@ -585,7 +610,6 @@ onMounted(() => {
                   </button>
                 </div>
               </form>
-              <p class="hint" v-if="state.adminHint && !adminListLoading">参考：{{ state.adminHint }}</p>
             </div>
 
             <!-- 数据表格 -->
@@ -613,10 +637,10 @@ onMounted(() => {
                     <table>
                       <thead>
                         <tr v-if="state.adminSection === 'roles'">
-                          <th>ID</th><th>名称</th><th>描述</th><th>资源IDs</th><th>操作</th>
+                          <th>ID</th><th>名称</th><th>描述</th><th>资源</th><th>操作</th>
                         </tr>
                         <tr v-else-if="state.adminSection === 'users'">
-                          <th>ID</th><th>用户名</th><th>昵称</th><th>角色IDs</th><th>操作</th>
+                          <th>ID</th><th>用户名</th><th>昵称</th><th>角色</th><th>操作</th>
                         </tr>
                         <tr v-else-if="state.adminSection === 'resources'">
                           <th>ID</th><th>编码</th><th>名称</th><th>操作</th>
@@ -637,10 +661,10 @@ onMounted(() => {
                         </tr>
                         <tr v-for="row in state.adminRows" :key="row.id" :class="{ 'is-busy': deletingIds.has(row.id) }">
                           <template v-if="state.adminSection === 'roles'">
-                            <td>{{ row.id }}</td><td>{{ row.name }}</td><td>{{ row.description }}</td><td>{{ (row.resourceIds || []).join(',') }}</td>
+                            <td>{{ row.id }}</td><td>{{ row.name }}</td><td>{{ row.description }}</td><td>{{ namesByIds(row.resourceIds) }}</td>
                           </template>
                           <template v-else-if="state.adminSection === 'users'">
-                            <td>{{ row.id }}</td><td>{{ row.username }}</td><td>{{ row.nickname }}</td><td>{{ (row.roleIds || []).join(',') }}</td>
+                            <td>{{ row.id }}</td><td>{{ row.username }}</td><td>{{ row.nickname }}</td><td>{{ namesByIds(row.roleIds) }}</td>
                           </template>
                           <template v-else-if="state.adminSection === 'resources'">
                             <td>{{ row.id }}</td><td>{{ row.code }}</td><td>{{ row.name }}</td>
