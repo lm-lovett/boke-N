@@ -256,6 +256,23 @@ class SqliteBlogRepository:
             )
             return [self._row_dict(row) for row in cur.fetchall()]
 
+    def list_resource_codes_by_role_ids(self, role_ids: list[int]) -> list[str]:
+        if not role_ids:
+            return []
+        with self._connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                f"""
+                SELECT DISTINCT r.code
+                FROM resources r
+                INNER JOIN role_resources rr ON rr.resource_id = r.id
+                WHERE rr.role_id IN ({self._placeholders(role_ids)})
+                ORDER BY r.code ASC
+                """,
+                role_ids,
+            )
+            return [str(row["code"]) for row in cur.fetchall()]
+
     def find_resource_by_id(self, resource_id: int) -> dict[str, Any] | None:
         with self._connection() as conn:
             cur = conn.cursor()

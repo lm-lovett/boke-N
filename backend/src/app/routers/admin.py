@@ -13,7 +13,7 @@ async def roles(
     authorization: str | None = Header(default=None, alias="Authorization"),
     service: BlogService = Depends(get_blog_service),
 ) -> ApiResponse:
-    service.require_admin(authorization)
+    await service.require_resource(authorization, "role:manage", "user:manage")
     return ApiResponse.ok(await service.list_roles())
 
 
@@ -23,7 +23,7 @@ async def create_role(
     authorization: str | None = Header(default=None, alias="Authorization"),
     service: BlogService = Depends(get_blog_service),
 ) -> ApiResponse:
-    service.require_admin(authorization)
+    await service.require_resource(authorization, "role:manage")
     return ApiResponse.ok(await service.create_role(request))
 
 
@@ -34,7 +34,7 @@ async def update_role(
     authorization: str | None = Header(default=None, alias="Authorization"),
     service: BlogService = Depends(get_blog_service),
 ) -> ApiResponse:
-    service.require_admin(authorization)
+    await service.require_resource(authorization, "role:manage")
     return ApiResponse.ok(await service.update_role(role_id, request))
 
 
@@ -44,7 +44,7 @@ async def delete_role(
     authorization: str | None = Header(default=None, alias="Authorization"),
     service: BlogService = Depends(get_blog_service),
 ) -> ApiResponse:
-    service.require_admin(authorization)
+    await service.require_resource(authorization, "role:manage")
     await service.delete_role(role_id)
     return ApiResponse.ok(None, message="删除成功")
 
@@ -54,7 +54,7 @@ async def users(
     authorization: str | None = Header(default=None, alias="Authorization"),
     service: BlogService = Depends(get_blog_service),
 ) -> ApiResponse:
-    service.require_admin(authorization)
+    await service.require_resource(authorization, "user:manage")
     return ApiResponse.ok(await service.list_users())
 
 
@@ -64,7 +64,7 @@ async def create_user(
     authorization: str | None = Header(default=None, alias="Authorization"),
     service: BlogService = Depends(get_blog_service),
 ) -> ApiResponse:
-    service.require_admin(authorization)
+    await service.require_resource(authorization, "user:manage")
     return ApiResponse.ok(await service.create_user(request))
 
 
@@ -75,7 +75,7 @@ async def update_user(
     authorization: str | None = Header(default=None, alias="Authorization"),
     service: BlogService = Depends(get_blog_service),
 ) -> ApiResponse:
-    service.require_admin(authorization)
+    await service.require_resource(authorization, "user:manage")
     return ApiResponse.ok(await service.update_user(user_id, request))
 
 
@@ -85,7 +85,7 @@ async def delete_user(
     authorization: str | None = Header(default=None, alias="Authorization"),
     service: BlogService = Depends(get_blog_service),
 ) -> ApiResponse:
-    service.require_admin(authorization)
+    await service.require_resource(authorization, "user:manage")
     await service.delete_user(user_id)
     return ApiResponse.ok(None, message="删除成功")
 
@@ -95,7 +95,7 @@ async def resources(
     authorization: str | None = Header(default=None, alias="Authorization"),
     service: BlogService = Depends(get_blog_service),
 ) -> ApiResponse:
-    service.require_admin(authorization)
+    await service.require_resource(authorization, "resource:manage", "role:manage")
     return ApiResponse.ok(await service.list_resources())
 
 
@@ -105,7 +105,7 @@ async def create_resource(
     authorization: str | None = Header(default=None, alias="Authorization"),
     service: BlogService = Depends(get_blog_service),
 ) -> ApiResponse:
-    service.require_admin(authorization)
+    await service.require_resource(authorization, "resource:manage")
     return ApiResponse.ok(await service.create_resource(request))
 
 
@@ -116,7 +116,7 @@ async def update_resource(
     authorization: str | None = Header(default=None, alias="Authorization"),
     service: BlogService = Depends(get_blog_service),
 ) -> ApiResponse:
-    service.require_admin(authorization)
+    await service.require_resource(authorization, "resource:manage")
     return ApiResponse.ok(await service.update_resource(resource_id, request))
 
 
@@ -126,7 +126,7 @@ async def delete_resource(
     authorization: str | None = Header(default=None, alias="Authorization"),
     service: BlogService = Depends(get_blog_service),
 ) -> ApiResponse:
-    service.require_admin(authorization)
+    await service.require_resource(authorization, "resource:manage")
     await service.delete_resource(resource_id)
     return ApiResponse.ok(None, message="删除成功")
 
@@ -136,7 +136,7 @@ async def articles(
     authorization: str | None = Header(default=None, alias="Authorization"),
     service: BlogService = Depends(get_blog_service),
 ) -> ApiResponse:
-    service.require_admin(authorization)
+    await service.require_resource(authorization, "article:manage")
     return ApiResponse.ok(await service.list_admin_articles())
 
 
@@ -146,7 +146,7 @@ async def create_article(
     authorization: str | None = Header(default=None, alias="Authorization"),
     service: BlogService = Depends(get_blog_service),
 ) -> ApiResponse:
-    principal = service.require_admin(authorization)
+    principal = await service.require_resource(authorization, "article:manage")
     return ApiResponse.ok(await service.create_article(request, principal))
 
 
@@ -157,7 +157,7 @@ async def update_article(
     authorization: str | None = Header(default=None, alias="Authorization"),
     service: BlogService = Depends(get_blog_service),
 ) -> ApiResponse:
-    service.require_admin(authorization)
+    await service.require_resource(authorization, "article:manage")
     return ApiResponse.ok(await service.update_article(article_id, request))
 
 
@@ -167,7 +167,7 @@ async def delete_article(
     authorization: str | None = Header(default=None, alias="Authorization"),
     service: BlogService = Depends(get_blog_service),
 ) -> ApiResponse:
-    service.require_admin(authorization)
+    await service.require_resource(authorization, "article:manage")
     await service.delete_article(article_id)
     return ApiResponse.ok(None, message="删除成功")
 
@@ -177,7 +177,7 @@ async def banned_words(
     authorization: str | None = Header(default=None, alias="Authorization"),
     service: BlogService = Depends(get_blog_service),
 ) -> ApiResponse:
-    service.require_admin(authorization)
+    await service.require_resource(authorization, "bannedword:manage")
     return ApiResponse.ok(await service.list_banned_words())
 
 
@@ -187,7 +187,7 @@ async def create_banned_word(
     authorization: str | None = Header(default=None, alias="Authorization"),
     service: BlogService = Depends(get_blog_service),
 ) -> ApiResponse:
-    service.require_admin(authorization)
+    await service.require_resource(authorization, "bannedword:manage")
     return ApiResponse.ok(await service.create_banned_word(request))
 
 
@@ -197,7 +197,7 @@ async def delete_banned_word(
     authorization: str | None = Header(default=None, alias="Authorization"),
     service: BlogService = Depends(get_blog_service),
 ) -> ApiResponse:
-    service.require_admin(authorization)
+    await service.require_resource(authorization, "bannedword:manage")
     await service.delete_banned_word(banned_word_id)
     return ApiResponse.ok(None, message="删除成功")
 
@@ -207,7 +207,7 @@ async def comments(
     authorization: str | None = Header(default=None, alias="Authorization"),
     service: BlogService = Depends(get_blog_service),
 ) -> ApiResponse:
-    service.require_admin(authorization)
+    await service.require_resource(authorization, "comment:manage")
     return ApiResponse.ok(await service.list_admin_comments())
 
 
@@ -217,6 +217,6 @@ async def delete_comment(
     authorization: str | None = Header(default=None, alias="Authorization"),
     service: BlogService = Depends(get_blog_service),
 ) -> ApiResponse:
-    service.require_admin(authorization)
+    await service.require_resource(authorization, "comment:manage")
     await service.delete_comment(comment_id)
     return ApiResponse.ok(None, message="删除成功")

@@ -4,9 +4,21 @@ from fastapi.responses import JSONResponse
 from app.api_response import ApiResponse
 
 
+class UnauthorizedError(Exception):
+    def __init__(self, message: str = "未登录或登录已过期"):
+        super().__init__(message)
+
+
 async def illegal_argument_handler(_: Request, exc: ValueError) -> JSONResponse:
     return JSONResponse(
         status_code=400,
+        content=ApiResponse.fail(str(exc)).model_dump(),
+    )
+
+
+async def unauthorized_handler(_: Request, exc: UnauthorizedError) -> JSONResponse:
+    return JSONResponse(
+        status_code=401,
         content=ApiResponse.fail(str(exc)).model_dump(),
     )
 

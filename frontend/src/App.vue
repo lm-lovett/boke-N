@@ -36,13 +36,26 @@ const RichTextEditor = defineAsyncComponent(() => import('./components/RichTextE
 const view = new URLSearchParams(window.location.search).get('view') === 'admin' ? 'admin' : 'h5';
 
 const menus = [
-  { key: 'roles', label: '角色管理', icon: ShieldCheck, endpoint: '/api/admin/roles' },
-  { key: 'users', label: '用户管理', icon: Users, endpoint: '/api/admin/users' },
-  { key: 'resources', label: '资源管理', icon: KeyRound, endpoint: '/api/admin/resources' },
-  { key: 'articles', label: '文章管理', icon: FileText, endpoint: '/api/admin/articles' },
-  { key: 'bannedWords', label: '违禁词管理', icon: Ban, endpoint: '/api/admin/banned-words' },
-  { key: 'comments', label: '评论记录管理', icon: MessagesSquare, endpoint: '/api/admin/comments' }
+  { key: 'roles', label: '角色管理', icon: ShieldCheck, endpoint: '/api/admin/roles', resource: 'role:manage' },
+  { key: 'users', label: '用户管理', icon: Users, endpoint: '/api/admin/users', resource: 'user:manage' },
+  { key: 'resources', label: '资源管理', icon: KeyRound, endpoint: '/api/admin/resources', resource: 'resource:manage' },
+  { key: 'articles', label: '文章管理', icon: FileText, endpoint: '/api/admin/articles', resource: 'article:manage' },
+  { key: 'bannedWords', label: '违禁词管理', icon: Ban, endpoint: '/api/admin/banned-words', resource: 'bannedword:manage' },
+  { key: 'comments', label: '评论记录管理', icon: MessagesSquare, endpoint: '/api/admin/comments', resource: 'comment:manage' }
 ];
+
+function readAdminSession() {
+  try {
+    return JSON.parse(localStorage.getItem('admin_session') || 'null');
+  } catch {
+    return null;
+  }
+}
+
+function hasMenuResource(resources) {
+  const codes = new Set((resources || []).map((item) => item.code));
+  return menus.some((menu) => codes.has(menu.resource));
+}
 
 // 分区要展示的关联选项：与列表请求并行拉取，避免两轮串行等待
 const optionEndpoints = {
@@ -50,11 +63,17 @@ const optionEndpoints = {
   users: '/api/admin/roles'
 };
 
+const storedAdminSession = readAdminSession();
+const storedAdminResources = storedAdminSession?.resources || [];
+const initialAdminSection =
+  menus.find((menu) => storedAdminResources.some((item) => item.code === menu.resource))?.key || 'roles';
+
 const state = reactive({
   mode: view,
   adminToken: localStorage.getItem('admin_token') || '',
-  adminUser: null,
-  adminSection: 'roles',
+  adminUser: storedAdminSession?.user || null,
+  adminResources: storedAdminResources,
+  adminSection: initialAdminSection,
   adminRows: [],
   adminOptions: [],
   adminMessage: '',
@@ -104,7 +123,12 @@ function closeAuth() {
 const adminMenuTitle = computed(() => menus.find((m) => m.key === state.adminSection)?.label || '管理');
 const adminMenuIcon = computed(() => menus.find((m) => m.key === state.adminSection)?.icon || LayoutGrid);
 const isAdminLoggedIn = computed(() => Boolean(state.adminToken));
-const isH5Admin = computed(() => (state.h5User?.roles || []).some((r) => r.name === 'admin'));
+const visibleMenus = computed(() => {
+  const codes = new Set((state.adminResources || []).map((item) => item.code));
+  return menus.filter((menu) => codes.has(menu.resource));
+});
+const displayedMenus = computed(() => (isAdminLoggedIn.value ? visibleMenus.value : menus));
+const isH5Admin = computed(() => hasMenuResource(state.h5User?.resources));
 
 function saveH5Session() {
   if (state.h5Token) {
@@ -122,14 +146,44 @@ function saveH5Session() {
 function saveAdminSession() {
   if (state.adminToken) {
     localStorage.setItem('admin_token', state.adminToken);
+    localStorage.setItem(
+      'admin_session',
+      JSON.stringify({
+        user: state.adminUser,
+        resources: state.adminResources
+      })
+    );
   } else {
     localStorage.removeItem('admin_token');
+    localStorage.removeItem('admin_session');
+  }
+}
+
+function applyAdminProfile(profile, token) {
+  if (token) {
+    state.adminToken = token;
+  }
+  state.adminUser = profile.user || null;
+  state.adminResources = profile.resources || [];
+  saveAdminSession();
+  ensureAdminSection();
+}
+
+function ensureAdminSection() {
+  const allowed = visibleMenus.value.map((menu) => menu.key);
+  if (!allowed.length) {
+    state.adminSection = 'roles';
+    return;
+  }
+  if (!allowed.includes(state.adminSection)) {
+    state.adminSection = allowed[0];
   }
 }
 
 function handleAuthExpired(message = '登录已失效，请重新登录') {
   state.adminToken = '';
   state.adminUser = null;
+  state.adminResources = [];
   state.adminRows = [];
   state.adminOptions = [];
   state.adminMessage = message;
@@ -169,14 +223,13 @@ async function loginAdmin(signal) {
     '',
     { signal }
   );
-  const roles = data.roles || [];
-  if (!roles.some((r) => r.name === 'admin')) {
-    throw new ApiError('当前账号不是管理员', 'business');
+  const resources = data.resources || [];
+  if (!hasMenuResource(resources)) {
+    throw new ApiError('当前账号没有后台权限', 'business');
   }
-  state.adminToken = data.token;
-  state.adminUser = data.user;
-  saveAdminSession();
+  applyAdminProfile(data, data.token);
   state.adminMessage = '登录成功';
+  await fetchAdminSection(signal, state.adminSection);
 }
 
 const {
@@ -185,7 +238,7 @@ const {
   run: runAdminList
 } = createTask(fetchAdminSection, {
   onError: (err) => {
-    if (err?.status === 401 || err?.status === 403) {
+    if (err?.status === 401) {
       handleAuthExpired();
     }
   }
@@ -193,7 +246,7 @@ const {
 
 const { loading: adminSaveLoading, run: runAdminSave } = createTask(postAdminSection, {
   onError: (err) => {
-    if (err?.status === 401 || err?.status === 403) {
+    if (err?.status === 401) {
       handleAuthExpired();
     } else {
       state.adminMessage = err.message;
@@ -222,6 +275,7 @@ function refreshAdminSection() {
 function adminLogout() {
   state.adminToken = '';
   state.adminUser = null;
+  state.adminResources = [];
   state.adminRows = [];
   state.adminOptions = [];
   state.adminMessage = '已退出';
@@ -310,9 +364,10 @@ async function confirmDelete(row) {
     state.adminMessage = '删除成功';
     await refreshAdminRows();
   } catch (err) {
-    state.adminMessage = err?.status === 401 || err?.status === 403 ? '登录已失效，请重新登录' : err.message;
-    if (err?.status === 401 || err?.status === 403) {
+    if (err?.status === 401) {
       handleAuthExpired();
+    } else {
+      state.adminMessage = err.message;
     }
   } finally {
     deletingIds.delete(row.id);
@@ -372,7 +427,11 @@ async function loginH5(signal) {
     { signal }
   );
   state.h5Token = data.token;
-  state.h5User = { ...(data.user || {}), roles: data.roles || [] };
+  state.h5User = {
+    ...(data.user || {}),
+    roles: data.roles || [],
+    resources: data.resources || []
+  };
   saveH5Session();
   authNotice.value = '';
   authModal.open = false;
@@ -451,12 +510,29 @@ function h5Logout() {
   state.h5Message = '已退出登录';
 }
 
+async function restoreAdminSession() {
+  const profile = await request('/api/auth/me', {}, state.adminToken);
+  if (!hasMenuResource(profile.resources)) {
+    handleAuthExpired('当前账号没有后台权限');
+    return;
+  }
+  applyAdminProfile(profile);
+  runAdminList(state.adminSection);
+}
+
 onMounted(() => {
   if (state.mode === 'admin') {
     if (!state.adminToken) {
       return;
     }
-    runAdminList(state.adminSection);
+    restoreAdminSession().catch((err) => {
+      if (err?.status === 401) {
+        handleAuthExpired();
+        return;
+      }
+      ensureAdminSection();
+      runAdminList(state.adminSection);
+    });
     return;
   }
   // 列表与热榜并行拉取，首屏不用等瀑布式串行
@@ -501,7 +577,7 @@ onMounted(() => {
           <nav class="side-nav">
             <h2>管理菜单</h2>
             <button
-              v-for="m in menus"
+              v-for="m in displayedMenus"
               :key="m.key"
               class="nav-item"
               :class="{ active: state.adminSection === m.key }"

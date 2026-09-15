@@ -105,11 +105,14 @@ class ArticleDetailResponse(CamelModel):
     comments: list[Comment]
 
 
-class LoginResponse(CamelModel):
-    token: str
+class AuthProfile(CamelModel):
     user: dict[str, Any]
     roles: list[Role]
     resources: list[Resource]
+
+
+class LoginResponse(AuthProfile):
+    token: str
 
 
 class AuthPrincipal:

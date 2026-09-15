@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header
 
 from app.api_response import ApiResponse
 from app.deps import get_blog_service
@@ -22,3 +22,11 @@ async def register(
     service: BlogService = Depends(get_blog_service),
 ) -> ApiResponse:
     return ApiResponse.ok(await service.register(request))
+
+
+@router.get("/me")
+async def me(
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    service: BlogService = Depends(get_blog_service),
+) -> ApiResponse:
+    return ApiResponse.ok(await service.current_profile(authorization))

@@ -185,6 +185,21 @@ class D1BlogRepository:
             tuple(ids),
         )
 
+    async def list_resource_codes_by_role_ids(self, role_ids: list[int]) -> list[str]:
+        if not role_ids:
+            return []
+        rows = await self._all(
+            f"""
+            SELECT DISTINCT r.code
+            FROM resources r
+            INNER JOIN role_resources rr ON rr.resource_id = r.id
+            WHERE rr.role_id IN ({placeholders(role_ids)})
+            ORDER BY r.code ASC
+            """,
+            tuple(role_ids),
+        )
+        return [str(row["code"]) for row in rows]
+
     async def find_resource_by_id(self, resource_id: int) -> dict[str, Any] | None:
         return await self._first(
             "SELECT id, code, name FROM resources WHERE id = ?",

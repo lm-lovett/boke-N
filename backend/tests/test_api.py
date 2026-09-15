@@ -34,6 +34,20 @@ def test_admin_login_and_article_flow(client: TestClient):
     token = login_data["token"]
     assert login_data["user"]["username"] == "admin"
     assert any(role["name"] == "admin" for role in login_data["roles"])
+    assert {item["code"] for item in login_data["resources"]} == {
+        "role:manage",
+        "user:manage",
+        "resource:manage",
+        "article:manage",
+        "bannedword:manage",
+        "comment:manage",
+    }
+
+    me = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert me.status_code == 200
+    assert {item["code"] for item in me.json()["data"]["resources"]} == {
+        item["code"] for item in login_data["resources"]
+    }
 
     articles = client.get("/api/articles")
     assert articles.status_code == 200
@@ -88,3 +102,67 @@ def test_register(client: TestClient):
     )
     assert response.status_code == 200
     assert response.json()["data"]["username"] == username
+
+
+def test_limited_role_only_sees_assigned_resources(client: TestClient):
+    admin_login = client.post(
+        "/api/auth/login",
+        json={"username": "admin", "password": "Admin123!"},
+    )
+    admin_token = admin_login.json()["data"]["token"]
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+
+    resources = client.get("/api/admin/resources", headers=admin_headers)
+    assert resources.status_code == 200
+    article_resource = next(item for item in resources.json()["data"] if item["code"] == "article:manage")
+
+    role = client.post(
+        "/api/admin/roles",
+        headers=admin_headers,
+        json={
+            "name": "pinpai",
+            "description": "品牌子账号",
+            "resourceIds": [article_resource["id"]],
+        },
+    )
+    assert role.status_code == 200
+    role_id = role.json()["data"]["id"]
+
+    user = client.post(
+        "/api/admin/users",
+        headers=admin_headers,
+        json={
+            "username": "pinpai",
+            "nickname": "品牌账号",
+            "password": "Pinpai123!",
+            "roleIds": [role_id],
+        },
+    )
+    assert user.status_code == 200
+
+    pinpai_login = client.post(
+        "/api/auth/login",
+        json={"username": "pinpai", "password": "Pinpai123!"},
+    )
+    assert pinpai_login.status_code == 200
+    pinpai_data = pinpai_login.json()["data"]
+    assert {item["code"] for item in pinpai_data["resources"]} == {"article:manage"}
+    pinpai_headers = {"Authorization": f"Bearer {pinpai_data['token']}"}
+
+    allowed = client.get("/api/admin/articles", headers=pinpai_headers)
+    assert allowed.status_code == 200
+
+    forbidden = client.get("/api/admin/roles", headers=pinpai_headers)
+    assert forbidden.status_code == 403
+    assert "没有权限" in forbidden.json()["message"]
+
+    demo_login = client.post(
+        "/api/auth/login",
+        json={"username": "demo", "password": "Demo123!"},
+    )
+    demo_token = demo_login.json()["data"]["token"]
+    denied = client.get(
+        "/api/admin/articles",
+        headers={"Authorization": f"Bearer {demo_token}"},
+    )
+    assert denied.status_code == 403

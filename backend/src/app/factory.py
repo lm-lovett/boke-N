@@ -4,7 +4,13 @@ from typing import Callable
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.exceptions import generic_handler, illegal_argument_handler, security_handler
+from app.exceptions import (
+    UnauthorizedError,
+    generic_handler,
+    illegal_argument_handler,
+    security_handler,
+    unauthorized_handler,
+)
 from app.routers import admin, auth, public
 
 
@@ -22,6 +28,7 @@ def create_app(
     )
 
     app.add_exception_handler(ValueError, illegal_argument_handler)
+    app.add_exception_handler(UnauthorizedError, unauthorized_handler)
     app.add_exception_handler(PermissionError, security_handler)
     app.add_exception_handler(Exception, generic_handler)
 

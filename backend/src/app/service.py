@@ -6,10 +6,12 @@ from typing import Any
 
 import bcrypt
 
+from app.exceptions import UnauthorizedError
 from app.jwt_service import JwtService
 from app.schemas import (
     ArticleRequest,
     AuthPrincipal,
+    AuthProfile,
     BannedWordRequest,
     CommentRequest,
     LoginResponse,
@@ -17,6 +19,15 @@ from app.schemas import (
     ResourceRequest,
     RoleRequest,
     UserRequest,
+)
+
+ADMIN_RESOURCE_CODES = (
+    "role:manage",
+    "user:manage",
+    "resource:manage",
+    "article:manage",
+    "bannedword:manage",
+    "comment:manage",
 )
 
 
@@ -38,23 +49,17 @@ class BlogService:
         if not user or not self._verify_password(password, user["passwordHash"]):
             raise ValueError("用户名或密码错误")
 
-        roles = await self._call(self.repo.list_roles_by_ids, user["roleIds"])
-        resource_ids = []
-        seen = set()
-        for role in roles:
-            for resource_id in role["resourceIds"]:
-                if resource_id not in seen:
-                    seen.add(resource_id)
-                    resource_ids.append(resource_id)
-        resources = await self._call(self.repo.list_resources_by_ids, resource_ids)
-        is_admin = any(role["name"] == "admin" for role in roles)
+        profile = await self._auth_profile(user)
+        is_admin = any(role["name"] == "admin" for role in profile["roles"])
         token = self.jwt_service.issue_token(user["id"], user["username"], user["roleIds"], is_admin)
-        return LoginResponse(
-            token=token,
-            user=self._sanitize_user(user),
-            roles=roles,
-            resources=resources,
-        )
+        return LoginResponse(token=token, **profile)
+
+    async def current_profile(self, authorization_header: str | None) -> AuthProfile:
+        principal = self.parse_token(authorization_header)
+        user = await self._call(self.repo.find_user_by_id, principal.user_id)
+        if not user:
+            raise UnauthorizedError("未登录或登录已过期")
+        return AuthProfile(**await self._auth_profile(user))
 
     async def register(self, request: RegisterRequest) -> dict:
         if self._blank(request.username) or self._blank(request.password):
@@ -323,18 +328,42 @@ class BlogService:
 
     def parse_token(self, authorization_header: str | None) -> AuthPrincipal:
         if self._blank(authorization_header) or not authorization_header.startswith("Bearer "):
-            raise PermissionError("未登录或登录已过期")
+            raise UnauthorizedError("未登录或登录已过期")
         token = authorization_header[len("Bearer ") :]
         try:
             return self.jwt_service.parse_token(token)
         except Exception:
-            raise PermissionError("未登录或登录已过期")
+            raise UnauthorizedError("未登录或登录已过期")
 
-    def require_admin(self, authorization_header: str | None) -> AuthPrincipal:
+    async def require_resource(
+        self, authorization_header: str | None, *resource_codes: str
+    ) -> AuthPrincipal:
         principal = self.parse_token(authorization_header)
-        if not principal.admin:
-            raise PermissionError("需要管理员权限")
+        owned = set(
+            await self._call(self.repo.list_resource_codes_by_role_ids, principal.role_ids)
+        )
+        if not owned.intersection(resource_codes):
+            raise PermissionError("没有权限访问该功能")
         return principal
+
+    async def require_admin(self, authorization_header: str | None) -> AuthPrincipal:
+        return await self.require_resource(authorization_header, *ADMIN_RESOURCE_CODES)
+
+    async def _auth_profile(self, user: dict) -> dict:
+        roles = await self._call(self.repo.list_roles_by_ids, user["roleIds"])
+        resource_ids = []
+        seen = set()
+        for role in roles:
+            for resource_id in role["resourceIds"]:
+                if resource_id not in seen:
+                    seen.add(resource_id)
+                    resource_ids.append(resource_id)
+        resources = await self._call(self.repo.list_resources_by_ids, resource_ids)
+        return {
+            "user": self._sanitize_user(user),
+            "roles": roles,
+            "resources": resources,
+        }
 
     def _blank(self, value: str | None) -> bool:
         return value is None or value.strip() == ""
